@@ -1,3 +1,4 @@
+import cookieParser from "cookie-parser";
 import express, { type Application } from "express";
 import { corsMiddleware } from "./middlewares/cors.middleware";
 import { applySecurityMiddlewares } from "./middlewares/security.middleware";
@@ -17,6 +18,7 @@ export const createApp = (): Application => {
 
   app.use(express.json({ limit: "10kb" }));
   app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+  app.use(cookieParser());
 
   app.use(router);
 
