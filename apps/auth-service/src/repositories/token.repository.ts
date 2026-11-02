@@ -61,6 +61,13 @@ export abstract class TokenRepository {
     await redisClient.del(RedisKeys.refreshSession(sessionId));
   }
 
+  static async sessionExists(sessionId: string): Promise<boolean> {
+    const exists = await redisClient.exists(
+      RedisKeys.refreshSession(sessionId),
+    );
+    return exists === 1;
+  }
+
   static async blacklistToken(
     tokenId: string,
     ttlSeconds: number,

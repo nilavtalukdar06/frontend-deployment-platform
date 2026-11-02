@@ -194,7 +194,7 @@ const schemas: Record<string, JsonObject> = {
         type: "string",
         enum: ["up", "down"],
         description:
-          "Result of a `PING` against the Redis instance shared with the auth-service. The gateway uses it for rate limiting and to look up revoked access tokens.",
+          "Result of a `PING` against the Redis instance shared with the auth-service. The gateway uses it for rate limiting and to check whether access tokens were revoked or their session ended.",
       },
       authService: {
         type: "string",
@@ -526,7 +526,7 @@ const logout: JsonObject = {
   tags: ["Auth"],
   operationId: "logout",
   summary: "Log out and revoke the current session",
-  description: `Public. Proxied to the auth-service \`POST /auth/logout\`. Blacklists the presented access token and refresh cookie (when valid) and deletes their session. Always succeeds, even when no credentials or invalid ones are sent.`,
+  description: `Public. Proxied to the auth-service \`POST /auth/logout\`. Blacklists the presented access token and refresh cookie (when valid) and deletes their session. Deleting the session also invalidates every access token issued for it, even one that is not sent with this request. Always succeeds, even when no credentials or invalid ones are sent.`,
   security: [{}, ...bearerSecurity, ...refreshCookieSecurity],
   responses: {
     "200": {
@@ -560,7 +560,7 @@ const me: JsonObject = {
       }),
     },
     "401": errorResponse(
-      "The bearer token is missing (`UNAUTHORIZED`) or is invalid, expired, revoked, not an access token, or belongs to an inactive user (`INVALID_TOKEN`). Produced by the gateway, except for the inactive-user case which comes from the auth-service.",
+      "The bearer token is missing (`UNAUTHORIZED`) or is invalid, expired, revoked, not an access token, belongs to a session that was logged out or ended, or belongs to an inactive user (`INVALID_TOKEN`). Produced by the gateway, except for the inactive-user case which comes from the auth-service.",
       errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
     ),
     ...proxiedErrorResponses,
@@ -573,7 +573,7 @@ export const openApiDocument: JsonObject = {
     title: "API Gateway",
     version: "1.0.0",
     description:
-      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the auth-service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth` is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks the Redis revocation list written by the auth-service on logout. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
+      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the auth-service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth` is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [

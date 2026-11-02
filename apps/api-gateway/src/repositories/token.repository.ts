@@ -8,4 +8,11 @@ export abstract class TokenRepository {
     );
     return exists === 1;
   }
+
+  static async sessionExists(sessionId: string): Promise<boolean> {
+    const exists = await redisClient.exists(
+      RedisKeys.refreshSession(sessionId),
+    );
+    return exists === 1;
+  }
 }

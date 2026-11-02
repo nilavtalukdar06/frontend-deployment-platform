@@ -442,7 +442,7 @@ const logout: JsonObject = {
   tags: ["Auth"],
   operationId: "logout",
   summary: "Log out and revoke the current session",
-  description: `Blacklists the presented access token and refresh cookie (when valid) and deletes their session. Always succeeds, even when no credentials or invalid ones are sent.`,
+  description: `Blacklists the presented access token and refresh cookie (when valid) and deletes their session. Deleting the session also invalidates every access token issued for it, even one that is not sent with this request. Always succeeds, even when no credentials or invalid ones are sent.`,
   security: [{}, ...bearerSecurity, ...refreshCookieSecurity],
   responses: {
     "200": {
@@ -474,7 +474,7 @@ const me: JsonObject = {
       }),
     },
     "401": errorResponse(
-      "The access token is missing (`UNAUTHORIZED`) or invalid, expired, revoked or belongs to an inactive user (`INVALID_TOKEN`).",
+      "The access token is missing (`UNAUTHORIZED`) or invalid, expired, revoked, belongs to a session that was logged out or ended, or belongs to an inactive user (`INVALID_TOKEN`).",
       errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
     ),
     ...sharedErrorResponses,

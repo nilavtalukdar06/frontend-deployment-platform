@@ -229,7 +229,12 @@ export abstract class AuthService {
 
     const claims = await TokenService.verify("access", accessToken);
 
-    if (await TokenRepository.isBlacklisted(claims.tokenId)) {
+    const [blacklisted, sessionActive] = await Promise.all([
+      TokenRepository.isBlacklisted(claims.tokenId),
+      TokenRepository.sessionExists(claims.sessionId),
+    ]);
+
+    if (blacklisted || !sessionActive) {
       throw AuthService.revokedToken();
     }
 

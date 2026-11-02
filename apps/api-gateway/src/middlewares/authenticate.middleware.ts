@@ -5,7 +5,10 @@ import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { logger } from "../lib/logger";
 import { TokenRepository } from "../repositories/token.repository";
-import { TokenService } from "../services/token.service";
+import {
+  TokenService,
+  type AccessTokenClaims,
+} from "../services/token.service";
 import { ApiError } from "../utils/api-error";
 
 export abstract class AuthenticateMiddleware {
@@ -36,7 +39,7 @@ export abstract class AuthenticateMiddleware {
 
     const claims = await TokenService.verifyAccessToken(accessToken);
 
-    if (await AuthenticateMiddleware.isRevoked(claims.tokenId)) {
+    if (await AuthenticateMiddleware.isRevoked(claims)) {
       throw new ApiError(
         StatusCodes.UNAUTHORIZED,
         ErrorMessage.TOKEN_REVOKED,
@@ -47,9 +50,13 @@ export abstract class AuthenticateMiddleware {
     req.auth = claims;
   }
 
-  private static async isRevoked(tokenId: string): Promise<boolean> {
+  private static async isRevoked(claims: AccessTokenClaims): Promise<boolean> {
     try {
-      return await TokenRepository.isBlacklisted(tokenId);
+      const [blacklisted, sessionActive] = await Promise.all([
+        TokenRepository.isBlacklisted(claims.tokenId),
+        TokenRepository.sessionExists(claims.sessionId),
+      ]);
+      return blacklisted || !sessionActive;
     } catch (err) {
       logger.error({ err }, "token revocation lookup failed");
       throw new ApiError(
