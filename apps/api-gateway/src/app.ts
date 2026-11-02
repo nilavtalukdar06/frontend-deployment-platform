@@ -1,4 +1,5 @@
 import express, { type Application } from "express";
+import { bodyLimit } from "./middlewares/body-limit.middleware";
 import { corsMiddleware } from "./middlewares/cors.middleware";
 import { applySecurityMiddlewares } from "./middlewares/security.middleware";
 import { rateLimiter } from "./middlewares/rate-limit.middleware";
@@ -14,6 +15,7 @@ export const createApp = (): Application => {
   app.use(corsMiddleware);
   app.use(requestLogger);
   app.use(rateLimiter);
+  app.use(bodyLimit);
 
   app.use(router);
 

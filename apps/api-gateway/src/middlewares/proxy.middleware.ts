@@ -9,16 +9,30 @@ import type { UpstreamService } from "../config/services";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { logger } from "../lib/logger";
+import type { AccessTokenClaims } from "../services/token.service";
 import { ApiError } from "../utils/api-error";
+import { payloadTooLargeError } from "./body-limit.middleware";
 
-type TrackedRequest = IncomingMessage & { id?: unknown; log?: Logger };
+type TrackedRequest = IncomingMessage & {
+  id?: unknown;
+  log?: Logger;
+  auth?: AccessTokenClaims;
+};
+
+const USER_ID_HEADER = "x-user-id";
+const SESSION_ID_HEADER = "x-session-id";
+const BODY_TOO_LARGE_CODE = "E_BODY_TOO_LARGE";
 
 const TIMEOUT_ERROR_CODES = new Set(["ETIMEDOUT", "ESOCKETTIMEDOUT"]);
 const UNREACHABLE_ERROR_CODES = new Set(["ECONNREFUSED", "ENOTFOUND"]);
 
-const toUpstreamError = (err: Error, service: UpstreamService): ApiError => {
+const toProxyError = (err: Error, service: UpstreamService): ApiError => {
   const code = (err as NodeJS.ErrnoException).code ?? "";
   const details = { service: service.name };
+
+  if (code === BODY_TOO_LARGE_CODE) {
+    return payloadTooLargeError();
+  }
 
   if (TIMEOUT_ERROR_CODES.has(code)) {
     return new ApiError(
@@ -61,6 +75,30 @@ export const createServiceProxy = (
     xfwd: true,
     on: {
       proxyReq: (proxyReq, req) => {
+        proxyReq.removeHeader(USER_ID_HEADER);
+        proxyReq.removeHeader(SESSION_ID_HEADER);
+
+        if (req.auth) {
+          proxyReq.setHeader(USER_ID_HEADER, req.auth.userId);
+          proxyReq.setHeader(SESSION_ID_HEADER, req.auth.sessionId);
+        }
+
+        if (req.headers["content-length"] === undefined) {
+          let receivedBytes = 0;
+
+          req.on("data", (chunk: Buffer) => {
+            receivedBytes += chunk.length;
+
+            if (receivedBytes > env.MAX_REQUEST_BODY_BYTES) {
+              proxyReq.destroy(
+                Object.assign(new Error("request body too large"), {
+                  code: BODY_TOO_LARGE_CODE,
+                }),
+              );
+            }
+          });
+        }
+
         proxyReq.setTimeout(env.PROXY_TIMEOUT_MS, () => {
           proxyReq.destroy(
             Object.assign(new Error("upstream request timed out"), {
@@ -81,9 +119,9 @@ export const createServiceProxy = (
         }
       },
       error: (err, req, res) => {
-        const apiError = toUpstreamError(err, service);
+        const apiError = toProxyError(err, service);
 
-        (req.log ?? logger).error(
+        (req.log ?? logger)[apiError.statusCode >= 500 ? "error" : "warn"](
           { err, service: service.name, statusCode: apiError.statusCode },
           apiError.message,
         );
@@ -94,6 +132,7 @@ export const createServiceProxy = (
         }
 
         res.statusCode = apiError.statusCode;
+        res.setHeader("Connection", "close");
         res.setHeader("Content-Type", "application/json; charset=utf-8");
         res.end(
           JSON.stringify({

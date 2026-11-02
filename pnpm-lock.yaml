@@ -44,12 +44,21 @@ importers:
       http-status-codes:
         specifier: ^2.3.0
         version: 2.3.0
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@7.2.0)
+      jose:
+        specifier: ^6.2.14
+        version: 6.2.14
       pino:
         specifier: ^10.4.0
         version: 10.4.0
       pino-http:
         specifier: ^11.0.0
         version: 11.0.0
+      rate-limit-redis:
+        specifier: ^6.0.2
+        version: 6.0.2(express-rate-limit@8.7.2(express@4.22.3(supports-color@7.2.0))(supports-color@7.2.0))
       swagger-ui-express:
         specifier: ^5.0.1
         version: 5.0.1(express@4.22.3(supports-color@7.2.0))

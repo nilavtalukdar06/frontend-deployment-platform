@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { logger } from "./lib/logger";
+import { redisClient } from "./lib/redis";
 
 let server: Server;
 
@@ -34,15 +35,18 @@ const shutdown = (signal: string): void => {
     process.exit(1);
   }, env.SHUTDOWN_TIMEOUT_MS);
 
-  server?.close((err) => {
-    clearTimeout(forceExitTimer);
+  server?.close(async () => {
+    logger.info("http server closed");
 
-    if (err) {
-      logger.error({ err }, "error while closing http server");
+    try {
+      await redisClient.quit();
+      logger.info("redis connection closed");
+      clearTimeout(forceExitTimer);
+      process.exit(0);
+    } catch (err) {
+      logger.error({ err }, "error while closing connections");
+      clearTimeout(forceExitTimer);
       process.exit(1);
     }
-
-    logger.info("http server closed");
-    process.exit(0);
   });
 };
