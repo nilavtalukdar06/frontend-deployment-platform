@@ -26,6 +26,39 @@
 - `.dockerignore` stays at the repo root, since the build context is always
   the repo root regardless of which app's compose file triggered the build.
 
+## API documentation
+
+- Every service under `apps/*` (each microservice and the api gateway) owns
+  an OpenAPI 3.1 document at `apps/<app>/src/docs/openapi.ts`, served with
+  `swagger-ui-express` at `/docs` (raw JSON at `/docs.json`) through
+  `apps/<app>/src/routes/docs.route.ts`.
+- Any change to the code of a microservice or the api gateway that affects
+  its public contract must update that app's OpenAPI document in the same
+  change. This covers routes and methods, path/query/body parameters,
+  validators, response shapes, status codes, error codes and messages,
+  authentication, cookies, headers, and rate limiting.
+- When a change in one service also changes what another service documents
+  (for example the api gateway exposing or proxying that service's routes),
+  update the API documentation of every affected service, not just the one
+  that was edited.
+- A new service must ship with its own OpenAPI document and `/docs` route
+  before the change is considered complete.
+- Never leave the document out of sync with the code: if a route is removed
+  or renamed, remove or rename it in the document too.
+
+## API gateway synchronization
+
+- The api gateway is the single entry point for clients, so any change to a
+  microservice's public API must be reflected in the api gateway in the same
+  change. This covers added, removed or renamed routes, changed methods,
+  request/response shapes, auth requirements, cookies and headers, and base
+  paths.
+- Reflecting a change means updating the gateway's routing/proxy
+  configuration, any request or response handling that depends on the
+  changed contract, and the gateway's own OpenAPI document.
+- Before considering a microservice change complete, check whether the api
+  gateway needs a matching update, and make it when it does.
+
 ## Environment variables
 
 - Whenever a new package is installed or a new service (database, cache,
