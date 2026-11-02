@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth-service-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-auth_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-auth_password}
+      POSTGRES_DB: ${POSTGRES_DB:-auth_service}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-auth_user} -d ${POSTGRES_DB:-auth_service}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - auth-service-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: auth-service-redis
+    restart: unless-stopped
+    command:
+      ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - auth-service-network
+
+  auth-service:
+    build:
+      context: ../..
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://auth_user:auth_password@postgres:5432/auth_service}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "${AUTH_SERVICE_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - auth-service-network
+
+networks:
+  auth-service-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
