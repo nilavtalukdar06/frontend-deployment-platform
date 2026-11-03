@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../lib/postgres";
 import {
   deployments,
+  projectEnvironmentVariables,
   projects,
   type NewProject,
   type Project,
@@ -23,6 +24,11 @@ export type ProjectChanges = Partial<
   >
 >;
 
+export interface EncryptedEnvironmentVariable {
+  key: string;
+  value: string;
+}
+
 export interface ProjectPage {
   items: Project[];
   total: number;
@@ -31,6 +37,7 @@ export interface ProjectPage {
 export abstract class ProjectRepository {
   static async create(
     data: Omit<NewProject, "id" | "createdAt" | "updatedAt" | "deletedAt">,
+    environmentVariables: EncryptedEnvironmentVariable[] = [],
   ): Promise<Project> {
     return db.transaction(async (tx) => {
       const [project] = await tx.insert(projects).values(data).returning();
@@ -48,6 +55,16 @@ export abstract class ProjectRepository {
         buildCommand: project.buildCommand,
         outputDirectory: project.outputDirectory,
       });
+
+      if (environmentVariables.length > 0) {
+        await tx.insert(projectEnvironmentVariables).values(
+          environmentVariables.map(({ key, value }) => ({
+            projectId: project.id,
+            key,
+            value,
+          })),
+        );
+      }
 
       return project;
     });

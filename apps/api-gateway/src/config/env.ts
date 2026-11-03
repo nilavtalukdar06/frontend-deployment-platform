@@ -20,7 +20,7 @@ export const env = createEnv({
     PROXY_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
     HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
 
-    MAX_REQUEST_BODY_BYTES: z.coerce.number().int().positive().default(10_240),
+    MAX_REQUEST_BODY_BYTES: z.coerce.number().int().positive().default(65_536),
 
     CORS_ORIGIN: z.string().default("*"),
 

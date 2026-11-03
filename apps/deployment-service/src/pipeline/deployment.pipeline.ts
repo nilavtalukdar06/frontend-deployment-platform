@@ -13,8 +13,27 @@ import { CloneService } from "../services/clone.service";
 import { UploadService, outputKeyPrefix } from "../services/upload.service";
 import { DeploymentError } from "../utils/deployment-error";
 import { resolveInside } from "../utils/resolve-inside";
+import { SecretCipher } from "../utils/secret-cipher";
 
 export type PipelineResult = "ready" | "skipped";
+
+const loadEnvironmentVariables = async (
+  projectId: string,
+): Promise<Record<string, string>> => {
+  const rows = await DeploymentRepository.findEnvironmentVariables(projectId);
+
+  try {
+    return Object.fromEntries(
+      rows.map(({ key, value }) => [key, SecretCipher.decrypt(value)]),
+    );
+  } catch (err) {
+    throw new DeploymentError(
+      DeploymentStep.INITIALIZE,
+      "environment variables could not be decrypted",
+      { cause: err },
+    );
+  }
+};
 
 const advance = async (
   deploymentId: string,
@@ -90,6 +109,12 @@ export const runDeploymentPipeline = async (params: {
       );
     }
 
+    const environmentVariables = await loadEnvironmentVariables(project.id);
+    logger.info(
+      { keys: Object.keys(environmentVariables) },
+      "environment variables loaded",
+    );
+
     logger.info({ step: DeploymentStep.CLONE }, "cloning repository");
     await advance(deploymentId, "cloning", DeploymentStep.CLONE);
     const token = await AuthServiceClient.getGithubToken(userId);
@@ -109,6 +134,7 @@ export const runDeploymentPipeline = async (params: {
       step: DeploymentStep.INSTALL,
       command: deployment.installCommand,
       cwd: projectDir,
+      environmentVariables,
       logger,
     });
 
@@ -118,6 +144,7 @@ export const runDeploymentPipeline = async (params: {
       step: DeploymentStep.BUILD,
       command: deployment.buildCommand,
       cwd: projectDir,
+      environmentVariables,
       logger,
     });
 

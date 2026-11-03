@@ -15,6 +15,12 @@ export const env = createEnv({
     AUTH_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
     INTERNAL_API_KEY: z.string().min(32),
 
+    ENV_ENCRYPTION_KEY: z
+      .string()
+      .refine((value) => Buffer.from(value, "base64").length === 32, {
+        message: "must be 32 bytes encoded as base64",
+      }),
+
     GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
     CORS_ORIGIN: z.string().default("*"),

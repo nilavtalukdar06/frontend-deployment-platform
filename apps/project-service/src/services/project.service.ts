@@ -12,6 +12,7 @@ import { ApiError } from "../utils/api-error";
 import { FrameworkService } from "./framework.service";
 import { AuthServiceClient } from "../lib/auth-service-client";
 import { mapWithConcurrency } from "../utils/map-with-concurrency";
+import { SecretCipher } from "../utils/secret-cipher";
 import { GithubService, type GithubRepository } from "./github.service";
 
 export interface PublicProject {
@@ -32,8 +33,16 @@ export interface PublicProject {
   updatedAt: Date;
 }
 
+export interface EnvironmentVariableInput {
+  key: string;
+  value: string;
+}
+
 export interface CreateProjectInput {
   repositoryId: number;
+  installCommand?: string;
+  buildCommand?: string;
+  environmentVariables?: EnvironmentVariableInput[];
 }
 
 export interface ImportableRepository {
@@ -136,7 +145,12 @@ export abstract class ProjectService {
 
   static async create(
     userId: string,
-    { repositoryId }: CreateProjectInput,
+    {
+      repositoryId,
+      installCommand,
+      buildCommand,
+      environmentVariables = [],
+    }: CreateProjectInput,
   ): Promise<PublicProject> {
     const accessToken = await AuthServiceClient.getGithubToken(userId);
     const repository = await ProjectService.requireRepository(
@@ -153,22 +167,31 @@ export abstract class ProjectService {
       accessToken,
     );
 
+    const encryptedEnvironmentVariables = environmentVariables.map(
+      ({ key, value }) => ({ key, value: SecretCipher.encrypt(value) }),
+    );
+
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = ProjectService.generateSlug();
 
       try {
-        const project = await ProjectRepository.create({
-          userId,
-          slug,
-          githubRepositoryId: repository.id,
-          private: repository.private,
-          name: repository.name,
-          description: repository.description,
-          repositoryUrl: repository.url,
-          branch: repository.defaultBranch,
-          framework: "vite",
-          rootDirectory: DEFAULT_ROOT_DIRECTORY,
-        });
+        const project = await ProjectRepository.create(
+          {
+            userId,
+            slug,
+            githubRepositoryId: repository.id,
+            private: repository.private,
+            name: repository.name,
+            description: repository.description,
+            repositoryUrl: repository.url,
+            branch: repository.defaultBranch,
+            framework: "vite",
+            rootDirectory: DEFAULT_ROOT_DIRECTORY,
+            installCommand,
+            buildCommand,
+          },
+          encryptedEnvironmentVariables,
+        );
 
         return ProjectService.toPublicProject(project);
       } catch (err) {
@@ -265,7 +288,7 @@ export abstract class ProjectService {
     }
   }
 
-  private static projectNotFound(): ApiError {
+  static projectNotFound(): ApiError {
     return new ApiError(
       StatusCodes.NOT_FOUND,
       ErrorMessage.PROJECT_NOT_FOUND,

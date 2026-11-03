@@ -10,6 +10,9 @@ export enum SuccessMessage {
   PROJECT_UPDATED = "Project updated successfully",
   PROJECT_DELETED = "Project deleted successfully",
   REPOSITORIES_RETRIEVED = "Repositories retrieved successfully",
+  ENVIRONMENT_VARIABLES_RETRIEVED = "Environment variables retrieved successfully",
+  ENVIRONMENT_VARIABLE_SAVED = "Environment variable saved successfully",
+  ENVIRONMENT_VARIABLE_DELETED = "Environment variable deleted successfully",
 }
 
 export enum ErrorMessage {
@@ -26,6 +29,8 @@ export enum ErrorMessage {
   UNSUPPORTED_FRAMEWORK = "Only Vite projects are supported",
   GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
+  ENVIRONMENT_VARIABLE_NOT_FOUND = "The requested environment variable could not be found",
+  ENVIRONMENT_VARIABLE_LIMIT_REACHED = "A project can have at most 64 environment variables",
   TOO_MANY_REQUESTS = "Too many requests, please try again later",
   INTERNAL_SERVER_ERROR = "Something went wrong on our end",
   SERVICE_UNAVAILABLE = "Service is temporarily unavailable",

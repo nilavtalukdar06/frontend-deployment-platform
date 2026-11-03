@@ -64,6 +64,20 @@
       "when": 1793715946980,
       "tag": "0008_deployment_pipeline_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793717917764,
+      "tag": "0009_create_project_environment_variables",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793717918157,
+      "tag": "0010_project_environment_variables_updated_at_trigger",
+      "breakpoints": true
     }
   ]
 }

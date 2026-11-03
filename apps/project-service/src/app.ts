@@ -15,7 +15,7 @@ export const createApp = (): Application => {
   app.use(requestLogger);
   app.use(rateLimiter);
 
-  app.use(express.json({ limit: "10kb" }));
+  app.use(express.json({ limit: "64kb" }));
   app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
   app.use(router);

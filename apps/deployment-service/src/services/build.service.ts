@@ -19,16 +19,17 @@ export abstract class BuildService {
     step: DeploymentStep;
     command: string;
     cwd: string;
+    environmentVariables: Record<string, string>;
     logger: Logger;
   }): Promise<void> {
-    const { step, command, cwd, logger } = params;
+    const { step, command, cwd, environmentVariables, logger } = params;
     const tail: string[] = [];
 
     return new Promise((resolve, reject) => {
       const child = spawn(command, {
         cwd,
         shell: true,
-        env: sandboxedEnv(),
+        env: { ...environmentVariables, ...sandboxedEnv() },
         stdio: ["ignore", "pipe", "pipe"],
         signal: AbortSignal.timeout(env.BUILD_TIMEOUT_MS),
         killSignal: "SIGKILL",

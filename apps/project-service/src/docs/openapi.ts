@@ -4,6 +4,12 @@ import {
   SuccessMessage,
 } from "../constants/response-message.enum";
 import { projectFrameworks } from "../db/schema";
+import {
+  MAX_ENVIRONMENT_VARIABLES,
+  MAX_ENVIRONMENT_VARIABLE_KEY_LENGTH,
+  MAX_ENVIRONMENT_VARIABLE_VALUE_LENGTH,
+  RESERVED_ENVIRONMENT_VARIABLE_KEYS,
+} from "../validators/project.validator";
 
 type JsonObject = Record<string, unknown>;
 type Headers = Record<string, JsonObject>;
@@ -60,6 +66,13 @@ const exampleProject = {
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
 
+const exampleEnvironmentVariable = {
+  key: "VITE_API_URL",
+  value: "https://api.example.com",
+  createdAt: "2026-11-03T09:30:00.000Z",
+  updatedAt: "2026-11-03T09:30:00.000Z",
+};
+
 const exampleRepository = {
   id: 715409281,
   name: "marketing-site",
@@ -94,6 +107,33 @@ const projectIdParameter: JsonObject = {
   required: true,
   description: "Identifier of a project owned by the authenticated user.",
   schema: { type: "string", format: "uuid" },
+};
+
+const environmentVariableKeyDescription = `Must start with a letter or underscore and contain only letters, digits and underscores. Case-sensitive. Reserved keys, which the build environment sets itself, are rejected: ${RESERVED_ENVIRONMENT_VARIABLE_KEYS.map((key) => `\`${key}\``).join(", ")}.`;
+
+const environmentVariableKeySchema: JsonObject = {
+  type: "string",
+  minLength: 1,
+  maxLength: MAX_ENVIRONMENT_VARIABLE_KEY_LENGTH,
+  pattern: "^[A-Za-z_][A-Za-z0-9_]*$",
+  description: environmentVariableKeyDescription,
+  example: "VITE_API_URL",
+};
+
+const environmentVariableValueSchema: JsonObject = {
+  type: "string",
+  maxLength: MAX_ENVIRONMENT_VARIABLE_VALUE_LENGTH,
+  description:
+    "Stored encrypted (AES-256-GCM). Not trimmed; an empty string is allowed.",
+  example: "https://api.example.com",
+};
+
+const environmentVariableKeyParameter: JsonObject = {
+  name: "key",
+  in: "path",
+  required: true,
+  description: environmentVariableKeyDescription,
+  schema: environmentVariableKeySchema,
 };
 
 const relativeDirectorySchema = (description: string): JsonObject => ({
@@ -160,7 +200,7 @@ const schemas: Record<string, JsonObject> = {
     additionalProperties: false,
     required: ["repositoryId"],
     description:
-      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub; the rest start with defaults and can be changed with `PATCH`.",
+      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub. `installCommand` and `buildCommand` fall back to their defaults when omitted; the remaining settings start with defaults. Everything except the repository can be changed later with `PATCH`.",
     properties: {
       repositoryId: {
         type: "integer",
@@ -169,6 +209,44 @@ const schemas: Record<string, JsonObject> = {
           "GitHub numeric repository id (`id` from `GET /projects/repositories`). The repository must be accessible with the user's GitHub token, the user must have push access, it must not be archived or disabled, and its default branch must be a Vite project.",
         example: 715409281,
       },
+      installCommand: projectProperties["installCommand"],
+      buildCommand: projectProperties["buildCommand"],
+      environmentVariables: {
+        type: "array",
+        maxItems: MAX_ENVIRONMENT_VARIABLES,
+        description:
+          "Environment variables passed to the install and build commands of every deployment. Keys must be unique. They can be changed later through `/projects/{id}/environment-variables`.",
+        items: { $ref: "#/components/schemas/EnvironmentVariableInput" },
+      },
+    },
+  },
+  EnvironmentVariableInput: {
+    type: "object",
+    additionalProperties: false,
+    required: ["key", "value"],
+    properties: {
+      key: environmentVariableKeySchema,
+      value: environmentVariableValueSchema,
+    },
+  },
+  SetEnvironmentVariableRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["value"],
+    properties: { value: environmentVariableValueSchema },
+  },
+  EnvironmentVariable: {
+    type: "object",
+    required: ["key", "value", "createdAt", "updatedAt"],
+    properties: {
+      key: { type: "string", example: "VITE_API_URL" },
+      value: {
+        type: "string",
+        description: "Decrypted value.",
+        example: "https://api.example.com",
+      },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
     },
   },
   UpdateProjectRequest: {
@@ -372,6 +450,33 @@ const schemas: Record<string, JsonObject> = {
       },
     ],
   },
+  EnvironmentVariableResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: { $ref: "#/components/schemas/EnvironmentVariable" },
+        },
+      },
+    ],
+  },
+  EnvironmentVariableListResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/EnvironmentVariable" },
+          },
+        },
+      },
+    ],
+  },
   HealthResponse: {
     allOf: [
       { $ref: "#/components/schemas/MessageResponse" },
@@ -396,7 +501,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for the route-level `NOT_FOUND` of an unknown path it is `{ path }`.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for `ENVIRONMENT_VARIABLE_LIMIT_REACHED` it is `{ maxEnvironmentVariables }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for the route-level `NOT_FOUND` of an unknown path it is `{ path }`.",
       },
       stack: {
         type: "string",
@@ -503,6 +608,23 @@ const responses: Record<string, JsonObject> = {
     "No project with this id exists for the authenticated user. Projects owned by other users and deleted projects are reported the same way.",
     errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.PROJECT_NOT_FOUND),
   ),
+  EnvironmentVariableNotFound: errorResponse(
+    "The project exists but has no environment variable with this key.",
+    errorExample(
+      404,
+      ErrorCode.NOT_FOUND,
+      ErrorMessage.ENVIRONMENT_VARIABLE_NOT_FOUND,
+    ),
+  ),
+  EnvironmentVariableLimitReached: errorResponse(
+    `Adding this key would give the project more than ${MAX_ENVIRONMENT_VARIABLES} environment variables. Updating an existing key is always allowed.`,
+    errorExample(
+      422,
+      ErrorCode.ENVIRONMENT_VARIABLE_LIMIT_REACHED,
+      ErrorMessage.ENVIRONMENT_VARIABLE_LIMIT_REACHED,
+      { maxEnvironmentVariables: MAX_ENVIRONMENT_VARIABLES },
+    ),
+  ),
   RepositoryAlreadyImported: errorResponse(
     "The user already has a project for this repository.",
     errorExample(
@@ -567,7 +689,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Imports a repository picked from `GET /projects/repositories`. Using the user's GitHub token (fetched from the auth-service), the repository is looked up by id and must be accessible with push access, then the framework is detected from its default branch (no clone) and must be Vite. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409 CONFLICT` is returned only after repeated collisions.",
+    "Imports a repository picked from `GET /projects/repositories`. Using the user's GitHub token (fetched from the auth-service), the repository is looked up by id and must be accessible with push access, then the framework is detected from its default branch (no clone) and must be Vite. On success the project, its environment variables (encrypted) and its first `queued` deployment are stored in one transaction with a unique two-word slug, and the project is returned. Environment variables are not part of the response; read them with `GET /projects/{id}/environment-variables`. If a random slug is already taken a new one is generated; `409 CONFLICT` is returned only after repeated collisions.",
   security: userIdSecurity,
   requestBody: {
     required: true,
@@ -742,6 +864,110 @@ const deleteProject: JsonObject = {
   },
 };
 
+const listEnvironmentVariables: JsonObject = {
+  tags: ["Environment variables"],
+  operationId: "listEnvironmentVariables",
+  summary: "List a project's environment variables",
+  description:
+    "Returns every variable with its decrypted value, sorted by key.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter],
+  responses: {
+    "200": {
+      description: "The project's environment variables.",
+      content: jsonContent("EnvironmentVariableListResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.ENVIRONMENT_VARIABLES_RETRIEVED,
+        data: [exampleEnvironmentVariable],
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    ...protectedErrorResponses,
+  },
+};
+
+const setEnvironmentVariable: JsonObject = {
+  tags: ["Environment variables"],
+  operationId: "setEnvironmentVariable",
+  summary: "Create or update an environment variable",
+  description:
+    "Creates the variable, or replaces its value when the key already exists. The new value is used by the next deployment; deployments that already ran are not affected.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter, environmentVariableKeyParameter],
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/SetEnvironmentVariableRequest" },
+      },
+    },
+  },
+  responses: {
+    "200": {
+      description: "The saved environment variable.",
+      content: jsonContent("EnvironmentVariableResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.ENVIRONMENT_VARIABLE_SAVED,
+        data: exampleEnvironmentVariable,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    "422": ref("EnvironmentVariableLimitReached"),
+    ...protectedErrorResponses,
+  },
+};
+
+const deleteEnvironmentVariable: JsonObject = {
+  tags: ["Environment variables"],
+  operationId: "deleteEnvironmentVariable",
+  summary: "Delete an environment variable",
+  security: userIdSecurity,
+  parameters: [projectIdParameter, environmentVariableKeyParameter],
+  responses: {
+    "200": {
+      description: "Environment variable deleted.",
+      content: jsonContent("MessageResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.ENVIRONMENT_VARIABLE_DELETED,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": {
+      description:
+        "`PROJECT_NOT_FOUND`: the project does not exist for this user. `ENVIRONMENT_VARIABLE_NOT_FOUND`: the project has no variable with this key. Both use the `NOT_FOUND` error code.",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
+          examples: {
+            project: {
+              summary: "Project not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.PROJECT_NOT_FOUND,
+              ),
+            },
+            environmentVariable: {
+              summary: "Environment variable not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.ENVIRONMENT_VARIABLE_NOT_FOUND,
+              ),
+            },
+          },
+        },
+      },
+    },
+    ...protectedErrorResponses,
+  },
+};
+
 export const openApiDocument: JsonObject = {
   openapi: "3.1.0",
   info: {
@@ -756,6 +982,11 @@ export const openApiDocument: JsonObject = {
       name: "Projects",
       description: "Create, list, read, update and delete projects.",
     },
+    {
+      name: "Environment variables",
+      description:
+        "Encrypted per-project variables passed to the install and build commands of each deployment.",
+    },
   ],
   paths: {
     "/health": { get: health },
@@ -765,6 +996,11 @@ export const openApiDocument: JsonObject = {
       get: getProject,
       patch: updateProject,
       delete: deleteProject,
+    },
+    "/projects/{id}/environment-variables": { get: listEnvironmentVariables },
+    "/projects/{id}/environment-variables/{key}": {
+      put: setEnvironmentVariable,
+      delete: deleteEnvironmentVariable,
     },
   },
   components: {

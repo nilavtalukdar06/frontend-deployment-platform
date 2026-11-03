@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { EnvironmentVariableController } from "../controllers/environment-variable.controller";
 import { ProjectController } from "../controllers/project.controller";
 import { AuthenticateMiddleware } from "../middlewares/authenticate.middleware";
 import { validate } from "../middlewares/validate.middleware";
@@ -38,4 +39,19 @@ projectRouter.delete(
   "/:id",
   validate(ProjectValidator.remove),
   asyncHandler(ProjectController.remove),
+);
+projectRouter.get(
+  "/:id/environment-variables",
+  validate(ProjectValidator.listEnvironmentVariables),
+  asyncHandler(EnvironmentVariableController.list),
+);
+projectRouter.put(
+  "/:id/environment-variables/:key",
+  validate(ProjectValidator.setEnvironmentVariable),
+  asyncHandler(EnvironmentVariableController.set),
+);
+projectRouter.delete(
+  "/:id/environment-variables/:key",
+  validate(ProjectValidator.deleteEnvironmentVariable),
+  asyncHandler(EnvironmentVariableController.remove),
 );

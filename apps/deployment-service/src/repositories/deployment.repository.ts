@@ -1,7 +1,8 @@
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
 import {
   deployments,
+  projectEnvironmentVariables,
   projects,
   type Deployment,
   type Project,
@@ -30,6 +31,19 @@ export abstract class DeploymentRepository {
       .limit(1);
 
     return row;
+  }
+
+  static async findEnvironmentVariables(
+    projectId: string,
+  ): Promise<{ key: string; value: string }[]> {
+    return db
+      .select({
+        key: projectEnvironmentVariables.key,
+        value: projectEnvironmentVariables.value,
+      })
+      .from(projectEnvironmentVariables)
+      .where(eq(projectEnvironmentVariables.projectId, projectId))
+      .orderBy(asc(projectEnvironmentVariables.key));
   }
 
   static async transition(
