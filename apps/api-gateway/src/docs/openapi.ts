@@ -26,6 +26,9 @@ const AuthServiceMessage = {
 const ProjectServiceMessage = {
   PROJECT_NOT_FOUND: "The requested project could not be found",
   PROJECT_NAME_ALREADY_EXISTS: "A project with this name already exists",
+  INVALID_REPOSITORY: "The repository does not exist or is not public",
+  GITHUB_UNAVAILABLE:
+    "The repository could not be verified with GitHub, please try again later",
   PROJECT_CREATED: "Project created successfully",
   PROJECTS_RETRIEVED: "Projects retrieved successfully",
   PROJECT_RETRIEVED: "Project retrieved successfully",
@@ -91,6 +94,7 @@ const exampleTokenPayload = {
 
 const exampleProject = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  slug: "brave-falcon",
   name: "marketing-site",
   description: "Public marketing website",
   repositoryUrl: "https://github.com/acme/marketing-site",
@@ -288,22 +292,19 @@ const schemas: Record<string, JsonObject> = {
   CreateProjectRequest: {
     type: "object",
     additionalProperties: false,
-    required: ["name", "repositoryUrl"],
+    required: ["gitUrl"],
+    description:
+      "Only the repository URL is supplied. The name, description, repository URL and branch of the project are taken from GitHub, the rest start with defaults and can be changed with `PATCH`.",
     properties: {
-      name: projectProperties["name"],
-      description: {
+      gitUrl: {
         type: "string",
-        maxLength: 500,
-        description: "Trimmed before validation.",
-        example: "Public marketing website",
+        format: "uri",
+        maxLength: 2048,
+        pattern: "^https://(www\\.)?github\\.com/[^/]+/[^/]+?(\\.git)?/?$",
+        description:
+          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
+        example: "https://github.com/acme/marketing-site",
       },
-      repositoryUrl: projectProperties["repositoryUrl"],
-      branch: projectProperties["branch"],
-      framework: projectProperties["framework"],
-      rootDirectory: projectProperties["rootDirectory"],
-      installCommand: projectProperties["installCommand"],
-      buildCommand: projectProperties["buildCommand"],
-      outputDirectory: projectProperties["outputDirectory"],
     },
   },
   UpdateProjectRequest: {
@@ -333,6 +334,7 @@ const schemas: Record<string, JsonObject> = {
     type: "object",
     required: [
       "id",
+      "slug",
       "name",
       "description",
       "repositoryUrl",
@@ -347,6 +349,13 @@ const schemas: Record<string, JsonObject> = {
     ],
     properties: {
       id: { type: "string", format: "uuid" },
+      slug: {
+        type: "string",
+        pattern: "^[a-z]+-[a-z]+$",
+        description:
+          "Globally unique identifier made of exactly two lowercase words separated by a hyphen, such as `brave-falcon`. Generated randomly when the project is created (not derived from the repository name), never changes, and is not released when the project is deleted.",
+        example: "brave-falcon",
+      },
       name: { type: "string" },
       description: { type: ["string", "null"] },
       repositoryUrl: { type: "string", format: "uri" },
@@ -551,6 +560,22 @@ const responses: Record<string, JsonObject> = {
       404,
       ErrorCode.NOT_FOUND,
       ProjectServiceMessage.PROJECT_NOT_FOUND,
+    ),
+  ),
+  InvalidRepository: errorResponse(
+    "The repository does not exist on GitHub or is not public. Private and missing repositories are reported the same way. Forwarded unchanged from the project-service.",
+    errorExample(
+      422,
+      ErrorCode.INVALID_REPOSITORY,
+      ProjectServiceMessage.INVALID_REPOSITORY,
+    ),
+  ),
+  GithubUnavailable: errorResponse(
+    "Either the project-service could not verify the repository because the GitHub API timed out, was unreachable, was rate limited or returned an unexpected response (`SERVICE_UNAVAILABLE`, forwarded unchanged), or the gateway could not reach the project-service or Redis (`SERVICE_UNAVAILABLE` with `details.service`, or while checking bearer token revocation).",
+    errorExample(
+      503,
+      ErrorCode.SERVICE_UNAVAILABLE,
+      ProjectServiceMessage.GITHUB_UNAVAILABLE,
     ),
   ),
   ProjectNameConflict: errorResponse(
@@ -831,9 +856,9 @@ const me: JsonObject = {
 const createProject: JsonObject = {
   tags: ["Projects"],
   operationId: "createProject",
-  summary: "Create a project",
+  summary: "Create a project from a GitHub repository",
   description:
-    "Protected. Proxied to the project-service `POST /projects`. The project is owned by the user the bearer token belongs to.",
+    "Protected. Proxied to the project-service `POST /projects`. The project is owned by the user the bearer token belongs to. The project-service validates `gitUrl`, verifies with the GitHub API that the repository exists and is public, and stores the project with a unique two-word slug.",
   security: bearerSecurity,
   requestBody: {
     required: true,
@@ -855,7 +880,9 @@ const createProject: JsonObject = {
     },
     "400": ref("ValidationError"),
     "409": ref("ProjectNameConflict"),
+    "422": ref("InvalidRepository"),
     ...projectProxiedErrorResponses,
+    "503": ref("GithubUnavailable"),
   },
 };
 

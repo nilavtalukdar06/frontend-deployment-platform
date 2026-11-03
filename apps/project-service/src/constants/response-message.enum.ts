@@ -18,6 +18,8 @@ export enum ErrorMessage {
   FORBIDDEN = "You do not have permission to access this resource",
   NOT_FOUND = "The requested resource could not be found",
   CONFLICT = "The request could not be completed due to a conflict",
+  INVALID_REPOSITORY = "The repository does not exist or is not public",
+  GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
   PROJECT_NAME_ALREADY_EXISTS = "A project with this name already exists",
   TOO_MANY_REQUESTS = "Too many requests, please try again later",

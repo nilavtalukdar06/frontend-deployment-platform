@@ -1,0 +1,2 @@
+ALTER TABLE "projects" DROP CONSTRAINT "projects_slug_format_check";--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_slug_format_check" CHECK ("projects"."slug" ~ '^[a-z]+-[a-z]+$');

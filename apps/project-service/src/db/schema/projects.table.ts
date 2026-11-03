@@ -28,6 +28,7 @@ export const projects = pgTable(
       .primaryKey()
       .default(sql`uuidv7()`),
     userId: uuid().notNull(),
+    slug: text().notNull(),
     name: text().notNull(),
     description: text(),
     repositoryUrl: text().notNull(),
@@ -42,6 +43,7 @@ export const projects = pgTable(
     deletedAt: timestamp({ withTimezone: true }),
   },
   (table) => [
+    uniqueIndex("projects_slug_unique_idx").on(table.slug),
     uniqueIndex("projects_user_id_name_active_unique_idx")
       .on(table.userId, table.name)
       .where(sql`${table.deletedAt} is null`),
@@ -49,6 +51,7 @@ export const projects = pgTable(
     index("projects_deleted_at_idx")
       .on(table.deletedAt)
       .where(sql`${table.deletedAt} is not null`),
+    check("projects_slug_format_check", sql`${table.slug} ~ '^[a-z]+-[a-z]+$'`),
     check(
       "projects_name_length_check",
       sql`char_length(${table.name}) between 1 and 100`,

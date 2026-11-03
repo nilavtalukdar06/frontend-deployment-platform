@@ -11,6 +11,8 @@ export const env = createEnv({
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url(),
 
+    GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+
     CORS_ORIGIN: z.string().default("*"),
 
     RATE_LIMIT_WINDOW_MS: z.coerce

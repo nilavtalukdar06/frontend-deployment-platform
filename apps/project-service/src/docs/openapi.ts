@@ -44,6 +44,7 @@ const errorResponse = (
 
 const exampleProject = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  slug: "brave-falcon",
   name: "marketing-site",
   description: "Public marketing website",
   repositoryUrl: "https://github.com/acme/marketing-site",
@@ -145,22 +146,19 @@ const schemas: Record<string, JsonObject> = {
   CreateProjectRequest: {
     type: "object",
     additionalProperties: false,
-    required: ["name", "repositoryUrl"],
+    required: ["gitUrl"],
+    description:
+      "Only the repository URL is supplied. The name, description, repository URL and branch of the project are taken from GitHub, the rest start with defaults and can be changed with `PATCH`.",
     properties: {
-      name: projectProperties["name"],
-      description: {
+      gitUrl: {
         type: "string",
-        maxLength: 500,
-        description: "Trimmed before validation.",
-        example: "Public marketing website",
+        format: "uri",
+        maxLength: 2048,
+        pattern: "^https://(www\\.)?github\\.com/[^/]+/[^/]+?(\\.git)?/?$",
+        description:
+          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
+        example: "https://github.com/acme/marketing-site",
       },
-      repositoryUrl: projectProperties["repositoryUrl"],
-      branch: projectProperties["branch"],
-      framework: projectProperties["framework"],
-      rootDirectory: projectProperties["rootDirectory"],
-      installCommand: projectProperties["installCommand"],
-      buildCommand: projectProperties["buildCommand"],
-      outputDirectory: projectProperties["outputDirectory"],
     },
   },
   UpdateProjectRequest: {
@@ -190,6 +188,7 @@ const schemas: Record<string, JsonObject> = {
     type: "object",
     required: [
       "id",
+      "slug",
       "name",
       "description",
       "repositoryUrl",
@@ -204,6 +203,13 @@ const schemas: Record<string, JsonObject> = {
     ],
     properties: {
       id: { type: "string", format: "uuid" },
+      slug: {
+        type: "string",
+        pattern: "^[a-z]+-[a-z]+$",
+        description:
+          "Globally unique identifier made of exactly two lowercase words separated by a hyphen, such as `brave-falcon`. Generated randomly when the project is created (not derived from the repository name), never changes, and is not released when the project is deleted.",
+        example: "brave-falcon",
+      },
       name: { type: "string" },
       description: { type: ["string", "null"] },
       repositoryUrl: { type: "string", format: "uri" },
@@ -341,12 +347,28 @@ const responses: Record<string, JsonObject> = {
     `The \`${USER_ID_HEADER}\` header is missing or is not a UUID. Behind the api-gateway this cannot happen for a request with a valid bearer token.`,
     errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
   ),
+  InvalidRepository: errorResponse(
+    "The repository does not exist on GitHub or is not public. Private and missing repositories are reported the same way.",
+    errorExample(
+      422,
+      ErrorCode.INVALID_REPOSITORY,
+      ErrorMessage.INVALID_REPOSITORY,
+    ),
+  ),
+  GithubUnavailable: errorResponse(
+    "The repository could not be verified because the GitHub API timed out, was unreachable, was rate limited or returned an unexpected response.",
+    errorExample(
+      503,
+      ErrorCode.SERVICE_UNAVAILABLE,
+      ErrorMessage.GITHUB_UNAVAILABLE,
+    ),
+  ),
   ProjectNotFound: errorResponse(
     "No project with this id exists for the authenticated user. Projects owned by other users and deleted projects are reported the same way.",
     errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.PROJECT_NOT_FOUND),
   ),
   NameConflict: errorResponse(
-    "The user already has a project with this name.",
+    "The user already has a project with this name (the repository name, for projects created from a repository).",
     errorExample(
       409,
       ErrorCode.CONFLICT,
@@ -407,7 +429,9 @@ const health: JsonObject = {
 const createProject: JsonObject = {
   tags: ["Projects"],
   operationId: "createProject",
-  summary: "Create a project",
+  summary: "Create a project from a GitHub repository",
+  description:
+    "Validates `gitUrl` with Zod, then looks the repository up with the GitHub API and requires it to be public. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409` is returned only after repeated collisions.",
   security: userIdSecurity,
   requestBody: {
     required: true,
@@ -429,6 +453,8 @@ const createProject: JsonObject = {
     },
     "400": ref("ValidationError"),
     "409": ref("NameConflict"),
+    "422": ref("InvalidRepository"),
+    "503": ref("GithubUnavailable"),
     ...protectedErrorResponses,
   },
 };

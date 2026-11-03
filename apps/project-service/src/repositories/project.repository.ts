@@ -3,7 +3,10 @@ import { db } from "../lib/postgres";
 import { projects, type NewProject, type Project } from "../db/schema";
 
 export type ProjectChanges = Partial<
-  Omit<NewProject, "id" | "userId" | "createdAt" | "updatedAt" | "deletedAt">
+  Omit<
+    NewProject,
+    "id" | "userId" | "slug" | "createdAt" | "updatedAt" | "deletedAt"
+  >
 >;
 
 export interface ProjectPage {

@@ -15,7 +15,7 @@ export const rateLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (command: string, ...args: string[]) =>
       redisClient.call(command, ...args) as Promise<RedisReply>,
-    prefix: "rate-limit:",
+    prefix: "project-rate-limit:",
   }),
   handler: (_req, _res, next) => {
     next(

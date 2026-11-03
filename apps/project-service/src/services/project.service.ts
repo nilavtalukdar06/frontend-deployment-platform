@@ -1,15 +1,19 @@
+import { randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import type { Project } from "../db/schema";
 import { ErrorCode } from "../constants/error-code.enum";
+import { SLUG_ADJECTIVES, SLUG_NOUNS } from "../constants/slug-words";
 import { ErrorMessage } from "../constants/response-message.enum";
 import {
   ProjectRepository,
   type ProjectChanges,
 } from "../repositories/project.repository";
 import { ApiError } from "../utils/api-error";
+import { GithubService, type GithubRepositoryRef } from "./github.service";
 
 export interface PublicProject {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   repositoryUrl: string;
@@ -24,15 +28,7 @@ export interface PublicProject {
 }
 
 export interface CreateProjectInput {
-  name: string;
-  description?: string;
-  repositoryUrl: string;
-  branch?: string;
-  framework?: Project["framework"];
-  rootDirectory?: string;
-  installCommand?: string;
-  buildCommand?: string;
-  outputDirectory?: string;
+  gitUrl: GithubRepositoryRef;
 }
 
 export interface ProjectList {
@@ -46,11 +42,14 @@ export interface ProjectList {
 }
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
+const SLUG_UNIQUE_INDEX = "projects_slug_unique_idx";
+const MAX_SLUG_ATTEMPTS = 10;
 
 export abstract class ProjectService {
   static toPublicProject(project: Project): PublicProject {
     return {
       id: project.id,
+      slug: project.slug,
       name: project.name,
       description: project.description,
       repositoryUrl: project.repositoryUrl,
@@ -67,14 +66,40 @@ export abstract class ProjectService {
 
   static async create(
     userId: string,
-    input: CreateProjectInput,
+    { gitUrl }: CreateProjectInput,
   ): Promise<PublicProject> {
-    try {
-      const project = await ProjectRepository.create({ ...input, userId });
-      return ProjectService.toPublicProject(project);
-    } catch (err) {
-      throw ProjectService.mapWriteError(err);
+    const repository = await GithubService.getPublicRepository(gitUrl);
+
+    for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
+      const slug = ProjectService.generateSlug();
+
+      try {
+        const project = await ProjectRepository.create({
+          userId,
+          slug,
+          name: repository.name,
+          description: repository.description,
+          repositoryUrl: repository.url,
+          branch: repository.defaultBranch,
+        });
+
+        return ProjectService.toPublicProject(project);
+      } catch (err) {
+        if (
+          ProjectService.uniqueViolationConstraint(err) === SLUG_UNIQUE_INDEX
+        ) {
+          continue;
+        }
+
+        throw ProjectService.mapWriteError(err);
+      }
     }
+
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      ErrorMessage.CONFLICT,
+      ErrorCode.CONFLICT,
+    );
   }
 
   static async list(
@@ -138,8 +163,15 @@ export abstract class ProjectService {
     );
   }
 
+  private static generateSlug(): string {
+    const adjective = SLUG_ADJECTIVES[randomInt(SLUG_ADJECTIVES.length)];
+    const noun = SLUG_NOUNS[randomInt(SLUG_NOUNS.length)];
+
+    return `${adjective}-${noun}`;
+  }
+
   private static mapWriteError(err: unknown): unknown {
-    if (ProjectService.isUniqueViolation(err)) {
+    if (ProjectService.uniqueViolationConstraint(err) !== undefined) {
       return new ApiError(
         StatusCodes.CONFLICT,
         ErrorMessage.PROJECT_NAME_ALREADY_EXISTS,
@@ -150,7 +182,7 @@ export abstract class ProjectService {
     return err;
   }
 
-  private static isUniqueViolation(err: unknown): boolean {
+  private static uniqueViolationConstraint(err: unknown): string | undefined {
     let current: unknown = err;
 
     for (let depth = 0; depth < 3 && current; depth += 1) {
@@ -159,7 +191,9 @@ export abstract class ProjectService {
         "code" in current &&
         current.code === POSTGRES_UNIQUE_VIOLATION
       ) {
-        return true;
+        return "constraint" in current && typeof current.constraint === "string"
+          ? current.constraint
+          : "";
       }
 
       current =
@@ -168,6 +202,6 @@ export abstract class ProjectService {
           : undefined;
     }
 
-    return false;
+    return undefined;
   }
 }
