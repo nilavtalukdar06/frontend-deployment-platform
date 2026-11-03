@@ -1,8 +1,12 @@
 import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
-import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
+import {
+  GITHUB_API_URL,
+  githubFetch,
+  githubUnavailableError,
+} from "../lib/github";
 import { logger } from "../lib/logger";
 import { ApiError } from "../utils/api-error";
 
@@ -19,8 +23,6 @@ export interface PublicRepository {
   defaultBranch: string;
 }
 
-const GITHUB_API_URL = "https://api.github.com";
-
 const repositoryResponseSchema = z.object({
   name: z.string().min(1),
   full_name: z.string().min(1),
@@ -31,11 +33,21 @@ const repositoryResponseSchema = z.object({
 });
 
 export abstract class GithubService {
+  static toRepositoryRef(repositoryUrl: string): GithubRepositoryRef {
+    const [owner = "", name = ""] = new URL(repositoryUrl).pathname
+      .split("/")
+      .filter(Boolean);
+
+    return { owner, name };
+  }
+
   static async getPublicRepository({
     owner,
     name,
   }: GithubRepositoryRef): Promise<PublicRepository> {
-    const response = await GithubService.fetchRepository(owner, name);
+    const response = await githubFetch(
+      `${GITHUB_API_URL}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
+    );
 
     if (
       response.status === StatusCodes.NOT_FOUND ||
@@ -52,14 +64,14 @@ export abstract class GithubService {
         },
         "github repository lookup failed",
       );
-      throw GithubService.unavailable();
+      throw githubUnavailableError();
     }
 
     const parsed = repositoryResponseSchema.safeParse(await response.json());
 
     if (!parsed.success) {
       logger.error({ err: parsed.error }, "unexpected github response shape");
-      throw GithubService.unavailable();
+      throw githubUnavailableError();
     }
 
     if (parsed.data.private) {
@@ -75,42 +87,11 @@ export abstract class GithubService {
     };
   }
 
-  private static async fetchRepository(
-    owner: string,
-    name: string,
-  ): Promise<Response> {
-    try {
-      return await fetch(
-        `${GITHUB_API_URL}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
-        {
-          redirect: "manual",
-          signal: AbortSignal.timeout(env.GITHUB_API_TIMEOUT_MS),
-          headers: {
-            Accept: "application/vnd.github+json",
-            "User-Agent": "react-deployment-platform-project-service",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        },
-      );
-    } catch (err) {
-      logger.error({ err }, "github repository lookup could not be completed");
-      throw GithubService.unavailable();
-    }
-  }
-
   private static invalidRepository(): ApiError {
     return new ApiError(
       StatusCodes.UNPROCESSABLE_ENTITY,
       ErrorMessage.INVALID_REPOSITORY,
       ErrorCode.INVALID_REPOSITORY,
-    );
-  }
-
-  private static unavailable(): ApiError {
-    return new ApiError(
-      StatusCodes.SERVICE_UNAVAILABLE,
-      ErrorMessage.GITHUB_UNAVAILABLE,
-      ErrorCode.SERVICE_UNAVAILABLE,
     );
   }
 }

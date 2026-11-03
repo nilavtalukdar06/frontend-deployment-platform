@@ -92,14 +92,6 @@ const projectProperties: Record<string, JsonObject> = {
       "Trimmed before validation. Unique per user among projects that are not deleted.",
     example: "marketing-site",
   },
-  repositoryUrl: {
-    type: "string",
-    format: "uri",
-    maxLength: 2048,
-    pattern: "^https://",
-    description: "HTTPS URL of the Git repository.",
-    example: "https://github.com/acme/marketing-site",
-  },
   branch: {
     type: "string",
     minLength: 1,
@@ -108,7 +100,6 @@ const projectProperties: Record<string, JsonObject> = {
     description: "Branch to build. Defaults to `main`.",
     example: "main",
   },
-  framework: { $ref: "#/components/schemas/ProjectFramework" },
   rootDirectory: {
     ...relativeDirectorySchema(
       "Directory of the repository that contains the app. Defaults to `.`.",
@@ -141,7 +132,8 @@ const schemas: Record<string, JsonObject> = {
   ProjectFramework: {
     type: "string",
     enum: [...projectFrameworks],
-    description: "Defaults to `vite`.",
+    description:
+      "Only `vite` is supported: every project is verified to be a Vite project when it is created and whenever its `branch` or `rootDirectory` changes.",
   },
   CreateProjectRequest: {
     type: "object",
@@ -156,7 +148,7 @@ const schemas: Record<string, JsonObject> = {
         maxLength: 2048,
         pattern: "^https://(www\\.)?github\\.com/[^/]+/[^/]+?(\\.git)?/?$",
         description:
-          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
+          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. It must also be a Vite project, checked with Vercel's framework detection against the default branch. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
         example: "https://github.com/acme/marketing-site",
       },
     },
@@ -166,7 +158,7 @@ const schemas: Record<string, JsonObject> = {
     additionalProperties: false,
     minProperties: 1,
     description:
-      "Partial update. At least one field is required; fields that are omitted stay unchanged.",
+      "Partial update. At least one field is required; fields that are omitted stay unchanged. The repository, slug and framework cannot be changed. Changing `branch` or `rootDirectory` re-checks the new location with the GitHub API and requires it to still be a Vite project.",
     properties: {
       name: projectProperties["name"],
       description: {
@@ -175,9 +167,7 @@ const schemas: Record<string, JsonObject> = {
         description: "Trimmed before validation. Send `null` to clear it.",
         example: "Public marketing website",
       },
-      repositoryUrl: projectProperties["repositoryUrl"],
       branch: projectProperties["branch"],
-      framework: projectProperties["framework"],
       rootDirectory: projectProperties["rootDirectory"],
       installCommand: projectProperties["installCommand"],
       buildCommand: projectProperties["buildCommand"],
@@ -315,7 +305,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for the route-level `NOT_FOUND` of an unknown path it is `{ path }`.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for the route-level `NOT_FOUND` of an unknown path it is `{ path }`.",
       },
       stack: {
         type: "string",
@@ -336,7 +326,7 @@ const responses: Record<string, JsonObject> = {
       {
         errors: [],
         properties: {
-          repositoryUrl: {
+          gitUrl: {
             errors: ["Invalid URL"],
           },
         },
@@ -347,14 +337,43 @@ const responses: Record<string, JsonObject> = {
     `The \`${USER_ID_HEADER}\` header is missing or is not a UUID. Behind the api-gateway this cannot happen for a request with a valid bearer token.`,
     errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
   ),
-  InvalidRepository: errorResponse(
-    "The repository does not exist on GitHub or is not public. Private and missing repositories are reported the same way.",
-    errorExample(
-      422,
-      ErrorCode.INVALID_REPOSITORY,
-      ErrorMessage.INVALID_REPOSITORY,
-    ),
-  ),
+  RepositoryRejected: {
+    description:
+      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist on GitHub or is not public (the two are reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        examples: {
+          notPublic: {
+            summary: "Missing or private repository",
+            value: errorExample(
+              422,
+              ErrorCode.INVALID_REPOSITORY,
+              ErrorMessage.INVALID_REPOSITORY,
+            ),
+          },
+          sourceNotFound: {
+            summary: "Branch or root directory not found",
+            value: errorExample(
+              422,
+              ErrorCode.INVALID_REPOSITORY,
+              ErrorMessage.SOURCE_NOT_FOUND,
+              { branch: "main", rootDirectory: "apps/web" },
+            ),
+          },
+          unsupportedFramework: {
+            summary: "Not a Vite project",
+            value: errorExample(
+              422,
+              ErrorCode.UNSUPPORTED_FRAMEWORK,
+              ErrorMessage.UNSUPPORTED_FRAMEWORK,
+              { detectedFramework: "nextjs" },
+            ),
+          },
+        },
+      },
+    },
+  },
   GithubUnavailable: errorResponse(
     "The repository could not be verified because the GitHub API timed out, was unreachable, was rate limited or returned an unexpected response.",
     errorExample(
@@ -431,7 +450,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Validates `gitUrl` with Zod, then looks the repository up with the GitHub API and requires it to be public. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409` is returned only after repeated collisions.",
+    "Validates `gitUrl` with Zod, looks the repository up with the GitHub API and requires it to be public, then detects the framework from the repository files (no clone) and requires it to be Vite. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409` is returned only after repeated collisions.",
   security: userIdSecurity,
   requestBody: {
     required: true,
@@ -453,7 +472,7 @@ const createProject: JsonObject = {
     },
     "400": ref("ValidationError"),
     "409": ref("NameConflict"),
-    "422": ref("InvalidRepository"),
+    "422": ref("RepositoryRejected"),
     "503": ref("GithubUnavailable"),
     ...protectedErrorResponses,
   },
@@ -524,6 +543,8 @@ const updateProject: JsonObject = {
   tags: ["Projects"],
   operationId: "updateProject",
   summary: "Update a project",
+  description:
+    "The repository and framework cannot be changed. When `branch` or `rootDirectory` is sent, the resulting location is looked up on GitHub and must still be a Vite project; otherwise the project is left unchanged.",
   security: userIdSecurity,
   parameters: [projectIdParameter],
   requestBody: {
@@ -547,6 +568,8 @@ const updateProject: JsonObject = {
     "400": ref("ValidationError"),
     "404": ref("ProjectNotFound"),
     "409": ref("NameConflict"),
+    "422": ref("RepositoryRejected"),
+    "503": ref("GithubUnavailable"),
     ...protectedErrorResponses,
   },
 };
@@ -579,7 +602,7 @@ export const openApiDocument: JsonObject = {
   info: {
     title: "Project Service API",
     version: "1.0.0",
-    description: `Project management for the React deployment platform. A project describes how to build a React app from a Git repository and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` route requires that header to be a UUID and only ever reads or changes projects owned by that user. Unknown routes return a \`404\` with the standard error envelope.`,
+    description: `Project management for the React deployment platform. A project describes how to build a Vite app from a public GitHub repository and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` route requires that header to be a UUID and only ever reads or changes projects owned by that user. Unknown routes return a \`404\` with the standard error envelope.`,
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [

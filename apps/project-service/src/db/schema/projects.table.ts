@@ -10,14 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const projectFrameworks = [
-  "vite",
-  "create-react-app",
-  "next",
-  "remix",
-  "gatsby",
-  "other",
-] as const;
+export const projectFrameworks = ["vite"] as const;
 
 export const projectFramework = pgEnum("project_framework", projectFrameworks);
 

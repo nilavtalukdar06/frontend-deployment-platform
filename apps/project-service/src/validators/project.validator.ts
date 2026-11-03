@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { projectFrameworks } from "../db/schema";
 import type { GithubRepositoryRef } from "../services/github.service";
 
 const GITHUB_PATH_PATTERN =
@@ -38,14 +37,12 @@ const gitUrl = z
 
 const name = z.string().trim().min(1).max(100);
 const description = z.string().trim().max(500);
-const repositoryUrl = z.url({ protocol: /^https$/ }).max(2048);
 const branch = z
   .string()
   .trim()
   .min(1)
   .max(255)
   .regex(/^[A-Za-z0-9._/-]+$/);
-const framework = z.enum(projectFrameworks);
 const relativeDirectory = z
   .string()
   .trim()
@@ -80,9 +77,7 @@ export abstract class ProjectValidator {
       .object({
         name: name.optional(),
         description: description.nullable().optional(),
-        repositoryUrl: repositoryUrl.optional(),
         branch: branch.optional(),
-        framework: framework.optional(),
         rootDirectory: relativeDirectory.optional(),
         installCommand: command.optional(),
         buildCommand: command.optional(),

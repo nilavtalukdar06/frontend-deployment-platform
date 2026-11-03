@@ -18,6 +18,8 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
     "@t3-oss/env-core": "^0.13.11",
+    "@vercel/frameworks": "^3.35.0",
+    "@vercel/fs-detectors": "^7.11.4",
     "bufferutil": "^4.1.0",
     "compression": "^1.8.2",
     "cors": "^2.8.6",

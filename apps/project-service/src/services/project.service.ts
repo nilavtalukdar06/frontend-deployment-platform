@@ -9,6 +9,7 @@ import {
   type ProjectChanges,
 } from "../repositories/project.repository";
 import { ApiError } from "../utils/api-error";
+import { FrameworkService } from "./framework.service";
 import { GithubService, type GithubRepositoryRef } from "./github.service";
 
 export interface PublicProject {
@@ -44,6 +45,7 @@ export interface ProjectList {
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const SLUG_UNIQUE_INDEX = "projects_slug_unique_idx";
 const MAX_SLUG_ATTEMPTS = 10;
+const DEFAULT_ROOT_DIRECTORY = ".";
 
 export abstract class ProjectService {
   static toPublicProject(project: Project): PublicProject {
@@ -70,6 +72,12 @@ export abstract class ProjectService {
   ): Promise<PublicProject> {
     const repository = await GithubService.getPublicRepository(gitUrl);
 
+    await FrameworkService.assertVite({
+      repository: gitUrl,
+      branch: repository.defaultBranch,
+      rootDirectory: DEFAULT_ROOT_DIRECTORY,
+    });
+
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = ProjectService.generateSlug();
 
@@ -81,6 +89,8 @@ export abstract class ProjectService {
           description: repository.description,
           repositoryUrl: repository.url,
           branch: repository.defaultBranch,
+          framework: "vite",
+          rootDirectory: DEFAULT_ROOT_DIRECTORY,
         });
 
         return ProjectService.toPublicProject(project);
@@ -134,6 +144,20 @@ export abstract class ProjectService {
     id: string,
     changes: ProjectChanges,
   ): Promise<PublicProject> {
+    if (changes.branch !== undefined || changes.rootDirectory !== undefined) {
+      const current = await ProjectRepository.findById(id, userId);
+
+      if (!current) {
+        throw ProjectService.projectNotFound();
+      }
+
+      await FrameworkService.assertVite({
+        repository: GithubService.toRepositoryRef(current.repositoryUrl),
+        branch: changes.branch ?? current.branch,
+        rootDirectory: changes.rootDirectory ?? current.rootDirectory,
+      });
+    }
+
     try {
       const project = await ProjectRepository.update(id, userId, changes);
 

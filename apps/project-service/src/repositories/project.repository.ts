@@ -5,7 +5,14 @@ import { projects, type NewProject, type Project } from "../db/schema";
 export type ProjectChanges = Partial<
   Omit<
     NewProject,
-    "id" | "userId" | "slug" | "createdAt" | "updatedAt" | "deletedAt"
+    | "id"
+    | "userId"
+    | "slug"
+    | "repositoryUrl"
+    | "framework"
+    | "createdAt"
+    | "updatedAt"
+    | "deletedAt"
   >
 >;
 

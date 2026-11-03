@@ -19,6 +19,8 @@ export enum ErrorMessage {
   NOT_FOUND = "The requested resource could not be found",
   CONFLICT = "The request could not be completed due to a conflict",
   INVALID_REPOSITORY = "The repository does not exist or is not public",
+  SOURCE_NOT_FOUND = "The branch or root directory was not found in the repository",
+  UNSUPPORTED_FRAMEWORK = "Only Vite projects are supported",
   GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
   PROJECT_NAME_ALREADY_EXISTS = "A project with this name already exists",
