@@ -10,11 +10,15 @@ import {
 } from "../repositories/project.repository";
 import { ApiError } from "../utils/api-error";
 import { FrameworkService } from "./framework.service";
-import { GithubService, type GithubRepositoryRef } from "./github.service";
+import { AuthServiceClient } from "../lib/auth-service-client";
+import { mapWithConcurrency } from "../utils/map-with-concurrency";
+import { GithubService, type GithubRepository } from "./github.service";
 
 export interface PublicProject {
   id: string;
   slug: string;
+  githubRepositoryId: number;
+  private: boolean;
   name: string;
   description: string | null;
   repositoryUrl: string;
@@ -29,7 +33,25 @@ export interface PublicProject {
 }
 
 export interface CreateProjectInput {
-  gitUrl: GithubRepositoryRef;
+  repositoryId: number;
+}
+
+export interface ImportableRepository {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  defaultBranch: string;
+  url: string;
+  pushedAt: string | null;
+  imported: boolean;
+}
+
+export interface ImportableRepositoryPage {
+  items: ImportableRepository[];
+  page: number;
+  hasNextPage: boolean;
 }
 
 export interface ProjectList {
@@ -44,6 +66,9 @@ export interface ProjectList {
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const SLUG_UNIQUE_INDEX = "projects_slug_unique_idx";
+const REPOSITORY_UNIQUE_INDEX =
+  "projects_user_id_github_repository_id_active_unique_idx";
+const DETECTION_CONCURRENCY = 6;
 const MAX_SLUG_ATTEMPTS = 10;
 const DEFAULT_ROOT_DIRECTORY = ".";
 
@@ -52,6 +77,8 @@ export abstract class ProjectService {
     return {
       id: project.id,
       slug: project.slug,
+      githubRepositoryId: project.githubRepositoryId,
+      private: project.private,
       name: project.name,
       description: project.description,
       repositoryUrl: project.repositoryUrl,
@@ -66,17 +93,65 @@ export abstract class ProjectService {
     };
   }
 
+  static async listImportableRepositories(
+    userId: string,
+    page: number,
+  ): Promise<ImportableRepositoryPage> {
+    const accessToken = await AuthServiceClient.getGithubToken(userId);
+    const { repositories, hasNextPage } =
+      await GithubService.listPushableRepositories(accessToken, page);
+
+    const viteFlags = await mapWithConcurrency(
+      repositories,
+      DETECTION_CONCURRENCY,
+      (repository) =>
+        FrameworkService.isViteRepository(repository, accessToken),
+    );
+    const viteRepositories = repositories.filter(
+      (_repository, index) => viteFlags[index],
+    );
+    const importedIds = new Set(
+      await ProjectRepository.findImportedRepositoryIds(
+        userId,
+        viteRepositories.map((repository) => repository.id),
+      ),
+    );
+
+    return {
+      items: viteRepositories.map((repository) => ({
+        id: repository.id,
+        name: repository.name,
+        fullName: repository.fullName,
+        description: repository.description,
+        private: repository.private,
+        defaultBranch: repository.defaultBranch,
+        url: repository.url,
+        pushedAt: repository.pushedAt,
+        imported: importedIds.has(repository.id),
+      })),
+      page,
+      hasNextPage,
+    };
+  }
+
   static async create(
     userId: string,
-    { gitUrl }: CreateProjectInput,
+    { repositoryId }: CreateProjectInput,
   ): Promise<PublicProject> {
-    const repository = await GithubService.getPublicRepository(gitUrl);
+    const accessToken = await AuthServiceClient.getGithubToken(userId);
+    const repository = await ProjectService.requireRepository(
+      accessToken,
+      repositoryId,
+    );
 
-    await FrameworkService.assertVite({
-      repository: gitUrl,
-      branch: repository.defaultBranch,
-      rootDirectory: DEFAULT_ROOT_DIRECTORY,
-    });
+    await FrameworkService.assertVite(
+      {
+        repository: repository.ref,
+        branch: repository.defaultBranch,
+        rootDirectory: DEFAULT_ROOT_DIRECTORY,
+      },
+      accessToken,
+    );
 
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = ProjectService.generateSlug();
@@ -85,6 +160,8 @@ export abstract class ProjectService {
         const project = await ProjectRepository.create({
           userId,
           slug,
+          githubRepositoryId: repository.id,
+          private: repository.private,
           name: repository.name,
           description: repository.description,
           repositoryUrl: repository.url,
@@ -151,11 +228,20 @@ export abstract class ProjectService {
         throw ProjectService.projectNotFound();
       }
 
-      await FrameworkService.assertVite({
-        repository: GithubService.toRepositoryRef(current.repositoryUrl),
-        branch: changes.branch ?? current.branch,
-        rootDirectory: changes.rootDirectory ?? current.rootDirectory,
-      });
+      const accessToken = await AuthServiceClient.getGithubToken(userId);
+      const repository = await ProjectService.requireRepository(
+        accessToken,
+        current.githubRepositoryId,
+      );
+
+      await FrameworkService.assertVite(
+        {
+          repository: repository.ref,
+          branch: changes.branch ?? current.branch,
+          rootDirectory: changes.rootDirectory ?? current.rootDirectory,
+        },
+        accessToken,
+      );
     }
 
     try {
@@ -187,6 +273,26 @@ export abstract class ProjectService {
     );
   }
 
+  private static async requireRepository(
+    accessToken: string,
+    repositoryId: number,
+  ): Promise<GithubRepository> {
+    const repository = await GithubService.getRepository(
+      accessToken,
+      repositoryId,
+    );
+
+    if (!repository) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        ErrorMessage.INVALID_REPOSITORY,
+        ErrorCode.INVALID_REPOSITORY,
+      );
+    }
+
+    return repository;
+  }
+
   private static generateSlug(): string {
     const adjective = SLUG_ADJECTIVES[randomInt(SLUG_ADJECTIVES.length)];
     const noun = SLUG_NOUNS[randomInt(SLUG_NOUNS.length)];
@@ -195,10 +301,20 @@ export abstract class ProjectService {
   }
 
   private static mapWriteError(err: unknown): unknown {
-    if (ProjectService.uniqueViolationConstraint(err) !== undefined) {
+    const constraint = ProjectService.uniqueViolationConstraint(err);
+
+    if (constraint === REPOSITORY_UNIQUE_INDEX) {
       return new ApiError(
         StatusCodes.CONFLICT,
-        ErrorMessage.PROJECT_NAME_ALREADY_EXISTS,
+        ErrorMessage.REPOSITORY_ALREADY_IMPORTED,
+        ErrorCode.REPOSITORY_ALREADY_IMPORTED,
+      );
+    }
+
+    if (constraint !== undefined) {
+      return new ApiError(
+        StatusCodes.CONFLICT,
+        ErrorMessage.CONFLICT,
         ErrorCode.CONFLICT,
       );
     }

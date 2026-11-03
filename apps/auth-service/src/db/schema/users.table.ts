@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   check,
   index,
   integer,
@@ -23,20 +24,22 @@ export const users = pgTable(
     id: uuid()
       .primaryKey()
       .default(sql`uuidv7()`),
-    email: text().notNull(),
-    passwordHash: text().notNull(),
+    githubId: bigint({ mode: "number" }).notNull(),
+    githubLogin: text().notNull(),
+    name: text(),
+    email: text(),
+    avatarUrl: text(),
+    githubAccessToken: text().notNull(),
+    githubTokenScopes: text().notNull(),
     status: userStatus().notNull().default("active"),
     lastLoginAt: timestamp({ withTimezone: true }),
-    passwordChangedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     tokenVersion: integer().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp({ withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("users_email_active_unique_idx")
-      .on(table.email)
-      .where(sql`${table.deletedAt} is null`),
+    uniqueIndex("users_github_id_unique_idx").on(table.githubId),
     index("users_created_at_idx").on(table.createdAt),
     index("users_deleted_at_idx")
       .on(table.deletedAt)

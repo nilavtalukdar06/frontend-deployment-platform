@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   check,
   index,
   pgEnum,
@@ -21,6 +23,8 @@ export const projects = pgTable(
       .primaryKey()
       .default(sql`uuidv7()`),
     userId: uuid().notNull(),
+    githubRepositoryId: bigint({ mode: "number" }).notNull(),
+    private: boolean().notNull(),
     slug: text().notNull(),
     name: text().notNull(),
     description: text(),
@@ -37,8 +41,8 @@ export const projects = pgTable(
   },
   (table) => [
     uniqueIndex("projects_slug_unique_idx").on(table.slug),
-    uniqueIndex("projects_user_id_name_active_unique_idx")
-      .on(table.userId, table.name)
+    uniqueIndex("projects_user_id_github_repository_id_active_unique_idx")
+      .on(table.userId, table.githubRepositoryId)
       .where(sql`${table.deletedAt} is null`),
     index("projects_user_id_created_at_idx").on(table.userId, table.createdAt),
     index("projects_deleted_at_idx")

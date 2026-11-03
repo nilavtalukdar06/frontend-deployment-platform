@@ -7,11 +7,14 @@ import { ApiError } from "../utils/api-error";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 
+const INTERNAL_PATH_PREFIX = "/internal/";
+
 export const rateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   limit: env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith(INTERNAL_PATH_PREFIX),
   store: new RedisStore({
     sendCommand: (command: string, ...args: string[]) =>
       redisClient.call(command, ...args) as Promise<RedisReply>,

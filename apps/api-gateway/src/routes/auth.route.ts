@@ -6,9 +6,10 @@ import { credentialRateLimiter } from "../middlewares/rate-limit.middleware";
 
 export const authRouter = Router();
 
-authRouter.post(
-  ["/auth/register", "/auth/login", "/auth/refresh"],
+authRouter.get(
+  ["/auth/github", "/auth/github/callback"],
   credentialRateLimiter,
 );
+authRouter.post("/auth/refresh", credentialRateLimiter);
 authRouter.use("/auth", AuthenticateMiddleware.handle);
 authRouter.use(createServiceProxy(authService, "/auth"));

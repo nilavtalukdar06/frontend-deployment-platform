@@ -32,6 +32,25 @@ export abstract class ProjectController {
       );
   }
 
+  static async listRepositories(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const { page } = req.query as unknown as { page: number };
+    const repositories = await ProjectService.listImportableRepositories(
+      userId,
+      page,
+    );
+
+    res
+      .status(StatusCodes.OK)
+      .json(
+        new ApiResponse(
+          StatusCodes.OK,
+          SuccessMessage.REPOSITORIES_RETRIEVED,
+          repositories,
+        ),
+      );
+  }
+
   static async list(req: Request, res: Response): Promise<void> {
     const userId = ProjectController.requireUserId(req);
     const { page, limit } = req.query as unknown as {

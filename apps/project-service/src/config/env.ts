@@ -11,6 +11,10 @@ export const env = createEnv({
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url(),
 
+    AUTH_SERVICE_URL: z.string().url().default("http://localhost:4000"),
+    AUTH_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
+    INTERNAL_API_KEY: z.string().min(32),
+
     GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
     CORS_ORIGIN: z.string().default("*"),

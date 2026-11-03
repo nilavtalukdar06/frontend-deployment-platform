@@ -12,12 +12,6 @@ const REFRESH_COOKIE_NAME = "refresh_token";
 
 const AuthServiceMessage = {
   VALIDATION_ERROR: "Validation failed for the given request",
-  EMAIL_ALREADY_REGISTERED: "An account with this email already exists",
-  INVALID_CREDENTIALS: "Invalid email or password",
-  ACCOUNT_LOCKED: "Too many failed login attempts, please try again later",
-  ACCOUNT_INACTIVE: "This account is not active",
-  REGISTERED: "Account created successfully",
-  LOGGED_IN: "Logged in successfully",
   TOKEN_REFRESHED: "Tokens refreshed successfully",
   LOGGED_OUT: "Logged out successfully",
   CURRENT_USER: "Current user retrieved successfully",
@@ -25,8 +19,12 @@ const AuthServiceMessage = {
 
 const ProjectServiceMessage = {
   PROJECT_NOT_FOUND: "The requested project could not be found",
-  PROJECT_NAME_ALREADY_EXISTS: "A project with this name already exists",
-  INVALID_REPOSITORY: "The repository does not exist or is not public",
+  INVALID_REPOSITORY:
+    "The repository does not exist or you do not have push access to it",
+  REPOSITORY_ALREADY_IMPORTED:
+    "This repository has already been imported as a project",
+  GITHUB_AUTH_REQUIRED:
+    "GitHub authorization is missing or was revoked, please sign in with GitHub again",
   SOURCE_NOT_FOUND:
     "The branch or root directory was not found in the repository",
   UNSUPPORTED_FRAMEWORK: "Only Vite projects are supported",
@@ -37,6 +35,7 @@ const ProjectServiceMessage = {
   PROJECT_RETRIEVED: "Project retrieved successfully",
   PROJECT_UPDATED: "Project updated successfully",
   PROJECT_DELETED: "Project deleted successfully",
+  REPOSITORIES_RETRIEVED: "Repositories retrieved successfully",
 } as const;
 
 const PROJECT_FRAMEWORKS = ["vite"] as const;
@@ -75,7 +74,10 @@ const errorResponse = (
 
 const exampleUser = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  githubLogin: "janedoe",
+  name: "Jane Doe",
   email: "jane.doe@example.com",
+  avatarUrl: "https://avatars.githubusercontent.com/u/583231?v=4",
   status: "active",
   lastLoginAt: "2026-11-03T09:30:00.000Z",
   createdAt: "2026-10-20T12:00:00.000Z",
@@ -91,6 +93,8 @@ const exampleTokenPayload = {
 const exampleProject = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
   slug: "brave-falcon",
+  githubRepositoryId: 715409281,
+  private: false,
   name: "marketing-site",
   description: "Public marketing website",
   repositoryUrl: "https://github.com/acme/marketing-site",
@@ -102,6 +106,18 @@ const exampleProject = {
   outputDirectory: "dist",
   createdAt: "2026-11-03T09:30:00.000Z",
   updatedAt: "2026-11-03T09:30:00.000Z",
+};
+
+const exampleRepository = {
+  id: 715409281,
+  name: "marketing-site",
+  fullName: "acme/marketing-site",
+  description: "Public marketing website",
+  private: false,
+  defaultBranch: "main",
+  url: "https://github.com/acme/marketing-site",
+  pushedAt: "2026-11-02T18:04:11Z",
+  imported: false,
 };
 
 const refreshCookieHeader: Headers = {
@@ -129,16 +145,6 @@ const proxiedErrorResponses = {
   "502": ref("BadGateway"),
   "503": ref("ServiceUnavailable"),
   "504": ref("GatewayTimeout"),
-};
-
-const emailSchema: JsonObject = {
-  type: "string",
-  format: "email",
-  minLength: 3,
-  maxLength: 320,
-  description:
-    "Trimmed and lower-cased by the service before validation and storage.",
-  example: "jane.doe@example.com",
 };
 
 const relativeDirectorySchema = (description: string): JsonObject => ({
@@ -194,51 +200,41 @@ const projectProperties: Record<string, JsonObject> = {
 };
 
 const schemas: Record<string, JsonObject> = {
-  RegisterRequest: {
-    type: "object",
-    additionalProperties: false,
-    required: ["email", "password"],
-    properties: {
-      email: emailSchema,
-      password: {
-        type: "string",
-        format: "password",
-        minLength: 10,
-        maxLength: 128,
-        example: "correct-horse-battery",
-      },
-    },
-  },
-  LoginRequest: {
-    type: "object",
-    additionalProperties: false,
-    required: ["email", "password"],
-    properties: {
-      email: emailSchema,
-      password: {
-        type: "string",
-        format: "password",
-        minLength: 1,
-        maxLength: 128,
-        example: "correct-horse-battery",
-      },
-    },
-  },
   UserStatus: {
     type: "string",
     enum: ["active", "suspended", "deactivated"],
   },
   User: {
     type: "object",
-    required: ["id", "email", "status", "lastLoginAt", "createdAt"],
+    required: [
+      "id",
+      "githubLogin",
+      "name",
+      "email",
+      "avatarUrl",
+      "status",
+      "lastLoginAt",
+      "createdAt",
+    ],
     properties: {
       id: { type: "string", format: "uuid" },
-      email: { type: "string", format: "email" },
+      githubLogin: {
+        type: "string",
+        description: "GitHub username, refreshed on every sign-in.",
+      },
+      name: { type: ["string", "null"] },
+      email: {
+        type: ["string", "null"],
+        format: "email",
+        description:
+          "Primary verified email of the GitHub account, lower-cased. Null when GitHub has none.",
+      },
+      avatarUrl: { type: ["string", "null"], format: "uri" },
       status: { $ref: "#/components/schemas/UserStatus" },
       lastLoginAt: {
         type: ["string", "null"],
         format: "date-time",
-        description: "Null until the first successful login.",
+        description: "Time of the last GitHub sign-in.",
       },
       createdAt: { type: "string", format: "date-time" },
     },
@@ -259,18 +255,6 @@ const schemas: Record<string, JsonObject> = {
       },
     },
   },
-  LoginData: {
-    type: "object",
-    required: ["user", "accessToken", "tokenType", "expiresIn"],
-    allOf: [
-      { $ref: "#/components/schemas/AccessTokenPayload" },
-      {
-        type: "object",
-        required: ["user"],
-        properties: { user: { $ref: "#/components/schemas/User" } },
-      },
-    ],
-  },
   ProjectFramework: {
     type: "string",
     enum: [...PROJECT_FRAMEWORKS],
@@ -280,18 +264,16 @@ const schemas: Record<string, JsonObject> = {
   CreateProjectRequest: {
     type: "object",
     additionalProperties: false,
-    required: ["gitUrl"],
+    required: ["repositoryId"],
     description:
-      "Only the repository URL is supplied. The name, description, repository URL and branch of the project are taken from GitHub, the rest start with defaults and can be changed with `PATCH`.",
+      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub; the rest start with defaults and can be changed with `PATCH`.",
     properties: {
-      gitUrl: {
-        type: "string",
-        format: "uri",
-        maxLength: 2048,
-        pattern: "^https://(www\\.)?github\\.com/[^/]+/[^/]+?(\\.git)?/?$",
+      repositoryId: {
+        type: "integer",
+        minimum: 1,
         description:
-          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. It must also be a Vite project, checked with Vercel's framework detection against the default branch. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
-        example: "https://github.com/acme/marketing-site",
+          "GitHub numeric repository id (`id` from `GET /projects/repositories`). The repository must be accessible with the user's GitHub token, the user must have push access, it must not be archived or disabled, and its default branch must be a Vite project.",
+        example: 715409281,
       },
     },
   },
@@ -321,6 +303,8 @@ const schemas: Record<string, JsonObject> = {
     required: [
       "id",
       "slug",
+      "githubRepositoryId",
+      "private",
       "name",
       "description",
       "repositoryUrl",
@@ -341,6 +325,15 @@ const schemas: Record<string, JsonObject> = {
         description:
           "Globally unique identifier made of exactly two lowercase words separated by a hyphen, such as `brave-falcon`. Generated randomly when the project is created (not derived from the repository name), never changes, and is not released when the project is deleted.",
         example: "brave-falcon",
+      },
+      githubRepositoryId: {
+        type: "integer",
+        description:
+          "GitHub numeric repository id. Stable across repository renames and transfers; a repository can be imported once per user.",
+      },
+      private: {
+        type: "boolean",
+        description: "Whether the repository was private when imported.",
       },
       name: { type: "string" },
       description: { type: ["string", "null"] },
@@ -380,6 +373,68 @@ const schemas: Record<string, JsonObject> = {
       },
       pagination: { $ref: "#/components/schemas/Pagination" },
     },
+  },
+  ImportableRepository: {
+    type: "object",
+    required: [
+      "id",
+      "name",
+      "fullName",
+      "description",
+      "private",
+      "defaultBranch",
+      "url",
+      "pushedAt",
+      "imported",
+    ],
+    properties: {
+      id: {
+        type: "integer",
+        description:
+          "GitHub numeric repository id; send it to `POST /projects`.",
+      },
+      name: { type: "string" },
+      fullName: { type: "string", example: "acme/marketing-site" },
+      description: { type: ["string", "null"] },
+      private: { type: "boolean" },
+      defaultBranch: { type: "string" },
+      url: { type: "string", format: "uri" },
+      pushedAt: { type: ["string", "null"], format: "date-time" },
+      imported: {
+        type: "boolean",
+        description:
+          "True when the user already has a (not deleted) project for this repository.",
+      },
+    },
+  },
+  ImportableRepositoryPage: {
+    type: "object",
+    required: ["items", "page", "hasNextPage"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/ImportableRepository" },
+        description:
+          "The Vite projects among the 30 repositories on this page. Can hold fewer than 30 items, or none, even when `hasNextPage` is true.",
+      },
+      page: { type: "integer", minimum: 1 },
+      hasNextPage: {
+        type: "boolean",
+        description: "Whether GitHub has another page of repositories.",
+      },
+    },
+  },
+  ImportableRepositoryPageResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: { $ref: "#/components/schemas/ImportableRepositoryPage" },
+        },
+      },
+    ],
   },
   HealthData: {
     type: "object",
@@ -427,16 +482,6 @@ const schemas: Record<string, JsonObject> = {
         type: "object",
         required: ["data"],
         properties: { data: { $ref: "#/components/schemas/User" } },
-      },
-    ],
-  },
-  LoginResponse: {
-    allOf: [
-      { $ref: "#/components/schemas/MessageResponse" },
-      {
-        type: "object",
-        required: ["data"],
-        properties: { data: { $ref: "#/components/schemas/LoginData" } },
       },
     ],
   },
@@ -496,7 +541,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `ACCOUNT_LOCKED` it is `{ retryAfterSeconds }`; for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service and project-service are forwarded unchanged.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service and project-service are forwarded unchanged.",
       },
       stack: {
         type: "string",
@@ -517,15 +562,15 @@ const responses: Record<string, JsonObject> = {
       {
         errors: [],
         properties: {
-          password: {
-            errors: ["Too small: expected string to have >=10 characters"],
+          repositoryId: {
+            errors: ["Invalid input: expected number, received string"],
           },
         },
       },
     ),
   ),
   TooManyRequests: errorResponse(
-    "The per-client rate limit was exceeded, either at the gateway or at an upstream service. The gateway applies `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every route and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `/auth/register`, `/auth/login` and `/auth/refresh`. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
+    "The per-client rate limit was exceeded, either at the gateway or at an upstream service. The gateway applies `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every route and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `GET /auth/github`, `GET /auth/github/callback` and `POST /auth/refresh`. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
     errorExample(
       429,
       ErrorCode.TOO_MANY_REQUESTS,
@@ -550,13 +595,13 @@ const responses: Record<string, JsonObject> = {
   ),
   RepositoryRejected: {
     description:
-      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist on GitHub or is not public (the two are reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
+      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist, is not accessible with the user's GitHub token, the user has no push access, or it is archived or disabled (all reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
     content: {
       "application/json": {
         schema: { $ref: "#/components/schemas/ErrorResponse" },
         examples: {
           notPublic: {
-            summary: "Missing or private repository",
+            summary: "Missing repository or no push access",
             value: errorExample(
               422,
               ErrorCode.INVALID_REPOSITORY,
@@ -586,21 +631,56 @@ const responses: Record<string, JsonObject> = {
     },
   },
   GithubUnavailable: errorResponse(
-    "Either the project-service could not verify the repository because the GitHub API timed out, was unreachable, was rate limited or returned an unexpected response (`SERVICE_UNAVAILABLE`, forwarded unchanged), or the gateway could not reach the project-service or Redis (`SERVICE_UNAVAILABLE` with `details.service`, or while checking bearer token revocation).",
+    "Either the project-service could not use GitHub because the GitHub API timed out, was unreachable, rate limited the user or returned an unexpected response, or it could not reach the auth-service for the user's GitHub token (`SERVICE_UNAVAILABLE`, forwarded unchanged), or the gateway could not reach the project-service or Redis (`SERVICE_UNAVAILABLE` with `details.service`, or while checking bearer token revocation).",
     errorExample(
       503,
       ErrorCode.SERVICE_UNAVAILABLE,
       ProjectServiceMessage.GITHUB_UNAVAILABLE,
     ),
   ),
-  ProjectNameConflict: errorResponse(
-    "The user already has a project with this name. Forwarded unchanged from the project-service.",
+  RepositoryAlreadyImported: errorResponse(
+    "The user already has a project for this repository. Forwarded unchanged from the project-service.",
     errorExample(
       409,
-      ErrorCode.CONFLICT,
-      ProjectServiceMessage.PROJECT_NAME_ALREADY_EXISTS,
+      ErrorCode.REPOSITORY_ALREADY_IMPORTED,
+      ProjectServiceMessage.REPOSITORY_ALREADY_IMPORTED,
     ),
   ),
+  GithubUnauthorized: {
+    description:
+      "The bearer token is missing (`UNAUTHORIZED`) or is invalid, expired, revoked, not an access token, or belongs to a session that was logged out or ended (`INVALID_TOKEN`), produced by the gateway; or the user's GitHub authorization is missing or was revoked on GitHub (`GITHUB_AUTH_REQUIRED`), forwarded from the project-service, in which case the user must sign in with GitHub again.",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        examples: {
+          missingBearerToken: {
+            summary: "Missing bearer token",
+            value: errorExample(
+              401,
+              ErrorCode.UNAUTHORIZED,
+              ErrorMessage.UNAUTHORIZED,
+            ),
+          },
+          invalidBearerToken: {
+            summary: "Invalid, expired or revoked bearer token",
+            value: errorExample(
+              401,
+              ErrorCode.INVALID_TOKEN,
+              ErrorMessage.INVALID_TOKEN,
+            ),
+          },
+          githubAuthRequired: {
+            summary: "GitHub token missing or revoked",
+            value: errorExample(
+              401,
+              ErrorCode.GITHUB_AUTH_REQUIRED,
+              ProjectServiceMessage.GITHUB_AUTH_REQUIRED,
+            ),
+          },
+        },
+      },
+    },
+  },
   PayloadTooLarge: errorResponse(
     "The request body is larger than `MAX_REQUEST_BODY_BYTES` (10240 bytes by default). Rejected from the `Content-Length` header before the body is read; for chunked bodies the request is aborted as soon as the limit is crossed and the connection is closed.",
     errorExample(
@@ -641,6 +721,12 @@ const projectProxiedErrorResponses = {
   ...proxiedErrorResponses,
 };
 
+const projectGithubErrorResponses = {
+  ...projectProxiedErrorResponses,
+  "401": ref("GithubUnauthorized"),
+  "503": ref("GithubUnavailable"),
+};
+
 const projectIdParameter: JsonObject = {
   name: "id",
   in: "path",
@@ -651,6 +737,10 @@ const projectIdParameter: JsonObject = {
 
 const bearerSecurity = [{ bearerAuth: [] }];
 const refreshCookieSecurity = [{ refreshCookie: [] }];
+
+const redirectHeader = (description: string): Headers => ({
+  Location: { description, schema: { type: "string", format: "uri" } },
+});
 
 const health: JsonObject = {
   security: [],
@@ -695,104 +785,56 @@ const health: JsonObject = {
   },
 };
 
-const register: JsonObject = {
+const githubAuthorize: JsonObject = {
   security: [],
   tags: ["Auth"],
-  operationId: "register",
-  summary: "Create an account",
+  operationId: "startGithubSignIn",
+  summary: "Start GitHub sign-in",
   description:
-    "Public. Proxied to the auth-service `POST /auth/register`. Subject to the stricter credential rate limit.",
-  requestBody: {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/RegisterRequest" },
+    "Public. Proxied to the auth-service `GET /auth/github`. Subject to the stricter credential rate limit. Open in the browser (a top-level navigation, not `fetch`). Sets a single-use `oauth_state` cookie and redirects to GitHub, requesting the `repo`, `read:user` and `user:email` scopes so the platform can list and read the user's public and private repositories.",
+  responses: {
+    "302": {
+      description: "Redirect to the GitHub authorization page.",
+      headers: {
+        ...redirectHeader(
+          "`https://github.com/login/oauth/authorize?…&scope=repo read:user user:email&state=…&code_challenge=…&code_challenge_method=S256`",
+        ),
+        "Set-Cookie": {
+          description:
+            "Forwarded unchanged from the auth-service. Sets the `oauth_state` cookie (HttpOnly, SameSite=Lax, Path=/auth, Secure in production).",
+          schema: { type: "string" },
+        },
       },
     },
-  },
-  responses: {
-    "201": {
-      description: "Account created.",
-      content: jsonContent("UserResponse", {
-        success: true,
-        statusCode: 201,
-        message: AuthServiceMessage.REGISTERED,
-        data: exampleUser,
-      }),
-    },
-    "400": ref("ValidationError"),
-    "409": errorResponse(
-      "An account with this email already exists.",
-      errorExample(
-        409,
-        ErrorCode.CONFLICT,
-        AuthServiceMessage.EMAIL_ALREADY_REGISTERED,
-      ),
-    ),
     ...proxiedErrorResponses,
   },
 };
 
-const login: JsonObject = {
+const githubCallback: JsonObject = {
   security: [],
   tags: ["Auth"],
-  operationId: "login",
-  summary: "Log in with email and password",
-  description:
-    "Public. Proxied to the auth-service `POST /auth/login`. Subject to the stricter credential rate limit. Returns a short-lived access token in the body and sets the refresh token as an HttpOnly cookie. After `LOGIN_MAX_ATTEMPTS` failed attempts within `LOGIN_ATTEMPT_WINDOW_SECONDS` the email is locked for `LOGIN_LOCK_SECONDS`.",
-  requestBody: {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/LoginRequest" },
-      },
-    },
-  },
+  operationId: "completeGithubSignIn",
+  summary: "GitHub sign-in callback",
+  description: `Public. Proxied to the auth-service \`GET /auth/github/callback\`; this gateway URL is the OAuth App's callback URL. Subject to the stricter credential rate limit. Verifies the state, exchanges the code, creates or updates the user, stores the encrypted GitHub token, starts a session and redirects to \`FRONTEND_URL/auth/callback\` with the \`${REFRESH_COOKIE_NAME}\` cookie set; the frontend then calls \`POST /auth/refresh\` for an access token. Never responds with JSON: failures redirect to \`FRONTEND_URL/auth/callback?error=<ERROR_CODE>\` with \`INVALID_OAUTH_STATE\`, \`GITHUB_AUTH_FAILED\`, \`FORBIDDEN\`, \`SERVICE_UNAVAILABLE\` or \`INTERNAL_SERVER_ERROR\`.`,
+  parameters: [
+    { name: "code", in: "query", required: false, schema: { type: "string" } },
+    { name: "state", in: "query", required: false, schema: { type: "string" } },
+    { name: "error", in: "query", required: false, schema: { type: "string" } },
+  ],
   responses: {
-    "200": {
-      description: "Logged in.",
-      headers: refreshCookieHeader,
-      content: jsonContent("LoginResponse", {
-        success: true,
-        statusCode: 200,
-        message: AuthServiceMessage.LOGGED_IN,
-        data: { user: exampleUser, ...exampleTokenPayload },
-      }),
-    },
-    "400": ref("ValidationError"),
-    "401": errorResponse(
-      "Unknown email or wrong password.",
-      errorExample(
-        401,
-        ErrorCode.INVALID_CREDENTIALS,
-        AuthServiceMessage.INVALID_CREDENTIALS,
-      ),
-    ),
-    "403": errorResponse(
-      "The credentials are valid but the account is not active.",
-      errorExample(
-        403,
-        ErrorCode.FORBIDDEN,
-        AuthServiceMessage.ACCOUNT_INACTIVE,
-      ),
-    ),
-    "423": errorResponse(
-      "Too many failed attempts; the account is temporarily locked.",
-      errorExample(
-        423,
-        ErrorCode.ACCOUNT_LOCKED,
-        AuthServiceMessage.ACCOUNT_LOCKED,
-        {
-          retryAfterSeconds: 900,
-        },
-      ),
-      {
-        "Retry-After": {
-          description: "Seconds until the lock expires.",
-          schema: { type: "integer", example: 900 },
+    "302": {
+      description:
+        "Redirect to the frontend, with the refresh cookie set on success or an `error` query parameter on failure.",
+      headers: {
+        ...redirectHeader(
+          "`FRONTEND_URL/auth/callback` or `FRONTEND_URL/auth/callback?error=<ERROR_CODE>`.",
+        ),
+        "Set-Cookie": {
+          description: `Forwarded unchanged from the auth-service. On success sets the \`${REFRESH_COOKIE_NAME}\` cookie (HttpOnly, SameSite=Strict, Path=/auth, Secure in production); always clears \`oauth_state\`.`,
+          schema: { type: "string" },
         },
       },
-    ),
+    },
     ...proxiedErrorResponses,
   },
 };
@@ -873,7 +915,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Protected. Proxied to the project-service `POST /projects`. The project is owned by the user the bearer token belongs to. The project-service validates `gitUrl`, verifies with the GitHub API that the repository exists and is public, requires it to be a Vite project (detected from the repository files, no clone), and stores the project with a unique two-word slug.",
+    "Protected. Proxied to the project-service `POST /projects`. Imports a repository picked from `GET /projects/repositories` for the user the bearer token belongs to. Using the user's GitHub token, the project-service looks the repository up by id, requires push access, requires its default branch to be a Vite project (detected from the repository files, no clone), and stores the project with a unique two-word slug.",
   security: bearerSecurity,
   requestBody: {
     required: true,
@@ -894,10 +936,40 @@ const createProject: JsonObject = {
       }),
     },
     "400": ref("ValidationError"),
-    "409": ref("ProjectNameConflict"),
+    "409": ref("RepositoryAlreadyImported"),
     "422": ref("RepositoryRejected"),
-    ...projectProxiedErrorResponses,
-    "503": ref("GithubUnavailable"),
+    ...projectGithubErrorResponses,
+  },
+};
+
+const listRepositories: JsonObject = {
+  tags: ["Projects"],
+  operationId: "listImportableRepositories",
+  summary: "List the user's GitHub repositories that can be imported",
+  description:
+    'Protected. Proxied to the project-service `GET /projects/repositories`. The "add project" picker: one page of 30 of the user\'s GitHub repositories (owned, collaborator and organization repositories with push access, newest push first, archived and disabled ones excluded), filtered to those whose default branch is a Vite project. Detection results are cached per repository and last push.',
+  security: bearerSecurity,
+  parameters: [
+    {
+      name: "page",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 1 },
+      description: "GitHub page of 30 repositories.",
+    },
+  ],
+  responses: {
+    "200": {
+      description: "The Vite repositories on this page.",
+      content: jsonContent("ImportableRepositoryPageResponse", {
+        success: true,
+        statusCode: 200,
+        message: ProjectServiceMessage.REPOSITORIES_RETRIEVED,
+        data: { items: [exampleRepository], page: 1, hasNextPage: true },
+      }),
+    },
+    "400": ref("ValidationError"),
+    ...projectGithubErrorResponses,
   },
 };
 
@@ -992,10 +1064,8 @@ const updateProject: JsonObject = {
     },
     "400": ref("ValidationError"),
     "404": ref("ProjectNotFound"),
-    "409": ref("ProjectNameConflict"),
     "422": ref("RepositoryRejected"),
-    ...projectProxiedErrorResponses,
-    "503": ref("GithubUnavailable"),
+    ...projectGithubErrorResponses,
   },
 };
 
@@ -1028,7 +1098,7 @@ export const openApiDocument: JsonObject = {
     title: "API Gateway",
     version: "1.0.0",
     description:
-      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service and routes under `/projects` to the project-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service relies on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
+      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service and routes under `/projects` to the project-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service relies on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
@@ -1039,7 +1109,7 @@ export const openApiDocument: JsonObject = {
     {
       name: "Auth",
       description:
-        "Registration, sessions and the current user, proxied to the auth-service. Public routes are listed in the API description; everything else requires a bearer token.",
+        "GitHub sign-in, sessions and the current user, proxied to the auth-service. Public routes are listed in the API description; everything else requires a bearer token.",
     },
     {
       name: "Projects",
@@ -1049,12 +1119,13 @@ export const openApiDocument: JsonObject = {
   ],
   paths: {
     "/health": { get: health },
-    "/auth/register": { post: register },
-    "/auth/login": { post: login },
+    "/auth/github": { get: githubAuthorize },
+    "/auth/github/callback": { get: githubCallback },
     "/auth/refresh": { post: refresh },
     "/auth/logout": { post: logout },
     "/auth/me": { get: me },
     "/projects": { post: createProject, get: listProjects },
+    "/projects/repositories": { get: listRepositories },
     "/projects/{id}": {
       get: getProject,
       patch: updateProject,
@@ -1068,14 +1139,14 @@ export const openApiDocument: JsonObject = {
         scheme: "bearer",
         bearerFormat: "JWT",
         description:
-          "Access token returned by `/auth/login` or `/auth/refresh`. Verified by the gateway and again by the auth-service; the `Authorization` header is forwarded unchanged.",
+          "Access token returned by `/auth/refresh` (call it right after GitHub sign-in). Verified by the gateway and again by the auth-service; the `Authorization` header is forwarded unchanged.",
       },
       refreshCookie: {
         type: "apiKey",
         in: "cookie",
         name: REFRESH_COOKIE_NAME,
         description:
-          "HttpOnly refresh token cookie set by `/auth/login` and `/auth/refresh`. Browsers send it automatically to `/auth/*`.",
+          "HttpOnly refresh token cookie set by `/auth/github/callback` and `/auth/refresh`. Browsers send it automatically to `/auth/*`.",
       },
     },
     schemas,

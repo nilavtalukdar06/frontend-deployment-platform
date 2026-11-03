@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { GithubRepositoryRef } from "../services/github.service";
 import {
   GITHUB_API_URL,
-  GITHUB_RAW_URL,
+  GITHUB_RAW,
   githubFetch,
   githubUnavailableError,
 } from "./github";
@@ -51,6 +51,7 @@ export class GithubFilesystem extends DetectorFilesystem {
   constructor(
     private readonly repository: GithubRepositoryRef,
     private readonly ref: string,
+    private readonly accessToken: string,
     basePath = "",
     private readonly listings: DirectoryListings = new Map(),
   ) {
@@ -83,7 +84,9 @@ export class GithubFilesystem extends DetectorFilesystem {
   protected async _readFile(name: string): Promise<Buffer> {
     const path = this.resolve(name);
     const response = await githubFetch(
-      `${GITHUB_RAW_URL}/${encodeURIComponent(this.repository.owner)}/${encodeURIComponent(this.repository.name)}/refs/heads/${encodePath(this.ref)}/${encodePath(path)}`,
+      this.contentsUrl(path),
+      this.accessToken,
+      GITHUB_RAW,
     );
 
     if (MISSING_STATUSES.includes(response.status)) {
@@ -102,9 +105,14 @@ export class GithubFilesystem extends DetectorFilesystem {
     return new GithubFilesystem(
       this.repository,
       this.ref,
+      this.accessToken,
       this.resolve(name),
       this.listings,
     );
+  }
+
+  private contentsUrl(path: string): string {
+    return `${GITHUB_API_URL}/repos/${encodeURIComponent(this.repository.owner)}/${encodeURIComponent(this.repository.name)}/contents${path ? `/${encodePath(path)}` : ""}?ref=${encodeURIComponent(this.ref)}`;
   }
 
   private resolve(name: string): string {
@@ -148,7 +156,8 @@ export class GithubFilesystem extends DetectorFilesystem {
     path: string,
   ): Promise<DirectoryEntry[] | undefined> {
     const response = await githubFetch(
-      `${GITHUB_API_URL}/repos/${encodeURIComponent(this.repository.owner)}/${encodeURIComponent(this.repository.name)}/contents${path ? `/${encodePath(path)}` : ""}?ref=${encodeURIComponent(this.ref)}`,
+      this.contentsUrl(path),
+      this.accessToken,
     );
 
     if (MISSING_STATUSES.includes(response.status)) {

@@ -38,17 +38,6 @@ export const globalErrorHandler = (
     log.error(logPayload, apiError.message);
   }
 
-  const retryAfterSeconds = (
-    apiError.details as { retryAfterSeconds?: unknown } | undefined
-  )?.retryAfterSeconds;
-
-  if (
-    apiError.errorCode === ErrorCode.ACCOUNT_LOCKED &&
-    typeof retryAfterSeconds === "number"
-  ) {
-    res.setHeader("Retry-After", String(retryAfterSeconds));
-  }
-
   res.status(apiError.statusCode).json({
     success: false,
     statusCode: apiError.statusCode,

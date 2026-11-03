@@ -1,23 +1,25 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
-import { env } from "../config/env";
 import type { User } from "../db/schema";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { logger } from "../lib/logger";
-import { LoginAttemptRepository } from "../repositories/login-attempt.repository";
 import {
   RotationResult,
   TokenRepository,
 } from "../repositories/token.repository";
 import { UserRepository } from "../repositories/user.repository";
 import { ApiError } from "../utils/api-error";
-import { PasswordService } from "./password.service";
+import { TokenCipher } from "../utils/token-cipher";
+import { GithubOauthService } from "./github-oauth.service";
 import { TokenService, type IssuedToken } from "./token.service";
 
 export interface PublicUser {
   id: string;
-  email: string;
+  githubLogin: string;
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
   status: User["status"];
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -36,68 +38,50 @@ export interface LoginResult extends TokenPair {
   user: PublicUser;
 }
 
-const POSTGRES_UNIQUE_VIOLATION = "23505";
-
 export abstract class AuthService {
   static toPublicUser(user: User): PublicUser {
     return {
       id: user.id,
+      githubLogin: user.githubLogin,
+      name: user.name,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       status: user.status,
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
     };
   }
 
-  static async register(email: string, password: string): Promise<PublicUser> {
-    const passwordHash = await PasswordService.hash(password);
-
-    try {
-      const user = await UserRepository.create({ email, passwordHash });
-      return AuthService.toPublicUser(user);
-    } catch (err) {
-      if (AuthService.isUniqueViolation(err)) {
-        throw new ApiError(
-          StatusCodes.CONFLICT,
-          ErrorMessage.EMAIL_ALREADY_REGISTERED,
-          ErrorCode.CONFLICT,
-        );
-      }
-
-      throw err;
-    }
-  }
-
-  static async login(email: string, password: string): Promise<LoginResult> {
-    const emailHash = TokenService.hash(email);
-
-    const lockTtlSeconds =
-      await LoginAttemptRepository.getLockTtlSeconds(emailHash);
-
-    if (lockTtlSeconds > 0) {
-      throw AuthService.accountLocked(lockTtlSeconds);
+  static async completeGithubLogin(
+    code: string | undefined,
+    state: string | undefined,
+    expectedState: string | undefined,
+  ): Promise<LoginResult> {
+    if (
+      !code ||
+      !state ||
+      !expectedState ||
+      !AuthService.safeEqual(state, expectedState)
+    ) {
+      throw AuthService.invalidOauthState();
     }
 
-    const user = await UserRepository.findByEmail(email);
-    const passwordMatches = user
-      ? await PasswordService.verify(user.passwordHash, password)
-      : await PasswordService.verifyAgainstDummy(password);
+    const codeVerifier = await GithubOauthService.consumeState(state);
 
-    if (!user || !passwordMatches) {
-      const nowLocked = await LoginAttemptRepository.recordFailure(emailHash);
-
-      if (nowLocked) {
-        throw AuthService.accountLocked(env.LOGIN_LOCK_SECONDS);
-      }
-
-      throw new ApiError(
-        StatusCodes.UNAUTHORIZED,
-        ErrorMessage.INVALID_CREDENTIALS,
-        ErrorCode.INVALID_CREDENTIALS,
-      );
+    if (!codeVerifier) {
+      throw AuthService.invalidOauthState();
     }
 
-    if (user.status !== "active") {
+    const grant = await GithubOauthService.exchangeCode(code, codeVerifier);
+    const profile = await GithubOauthService.fetchProfile(grant.accessToken);
+
+    const user = await UserRepository.upsertFromGithub({
+      ...profile,
+      githubAccessToken: TokenCipher.encrypt(grant.accessToken),
+      githubTokenScopes: grant.scopes.join(","),
+    });
+
+    if (user.deletedAt || user.status !== "active") {
       throw new ApiError(
         StatusCodes.FORBIDDEN,
         ErrorMessage.ACCOUNT_INACTIVE,
@@ -105,28 +89,21 @@ export abstract class AuthService {
       );
     }
 
-    await LoginAttemptRepository.clear(emailHash);
-    await UserRepository.touchLastLogin(user.id);
+    return AuthService.startSession(user);
+  }
 
-    const sessionId = randomUUID();
-    const accessToken = await TokenService.issue("access", user.id, sessionId);
-    const refreshToken = await TokenService.issue(
-      "refresh",
-      user.id,
-      sessionId,
-    );
+  static async getGithubAccessToken(userId: string): Promise<string> {
+    const user = await UserRepository.findById(userId);
 
-    await TokenRepository.saveRefreshTokenHash(
-      sessionId,
-      TokenService.hash(refreshToken.token),
-      refreshToken.expiresInSeconds,
-    );
+    if (!user || user.status !== "active") {
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        ErrorMessage.NOT_FOUND,
+        ErrorCode.NOT_FOUND,
+      );
+    }
 
-    return {
-      user: AuthService.toPublicUser(user),
-      accessToken,
-      refreshToken,
-    };
+    return TokenCipher.decrypt(user.githubAccessToken);
   }
 
   static async refresh(presentedToken: string | undefined): Promise<TokenPair> {
@@ -247,12 +224,43 @@ export abstract class AuthService {
     return { ...AuthService.toPublicUser(user), sessionId: claims.sessionId };
   }
 
-  private static accountLocked(retryAfterSeconds: number): ApiError {
+  private static async startSession(user: User): Promise<LoginResult> {
+    const sessionId = randomUUID();
+    const accessToken = await TokenService.issue("access", user.id, sessionId);
+    const refreshToken = await TokenService.issue(
+      "refresh",
+      user.id,
+      sessionId,
+    );
+
+    await TokenRepository.saveRefreshTokenHash(
+      sessionId,
+      TokenService.hash(refreshToken.token),
+      refreshToken.expiresInSeconds,
+    );
+
+    return {
+      user: AuthService.toPublicUser(user),
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  private static invalidOauthState(): ApiError {
     return new ApiError(
-      StatusCodes.LOCKED,
-      ErrorMessage.ACCOUNT_LOCKED,
-      ErrorCode.ACCOUNT_LOCKED,
-      { retryAfterSeconds },
+      StatusCodes.BAD_REQUEST,
+      ErrorMessage.INVALID_OAUTH_STATE,
+      ErrorCode.INVALID_OAUTH_STATE,
+    );
+  }
+
+  private static safeEqual(left: string, right: string): boolean {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+
+    return (
+      leftBuffer.length === rightBuffer.length &&
+      timingSafeEqual(leftBuffer, rightBuffer)
     );
   }
 
@@ -270,26 +278,5 @@ export abstract class AuthService {
       ErrorMessage.TOKEN_REVOKED,
       ErrorCode.INVALID_TOKEN,
     );
-  }
-
-  private static isUniqueViolation(err: unknown): boolean {
-    let current: unknown = err;
-
-    for (let depth = 0; depth < 3 && current; depth += 1) {
-      if (
-        typeof current === "object" &&
-        "code" in current &&
-        current.code === POSTGRES_UNIQUE_VIOLATION
-      ) {
-        return true;
-      }
-
-      current =
-        typeof current === "object" && "cause" in current
-          ? current.cause
-          : undefined;
-    }
-
-    return false;
   }
 }

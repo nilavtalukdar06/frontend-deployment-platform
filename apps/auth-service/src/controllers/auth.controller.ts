@@ -8,39 +8,70 @@ import {
 } from "../constants/response-message.enum";
 import { AuthenticateMiddleware } from "../middlewares/authenticate.middleware";
 import { AuthService, type TokenPair } from "../services/auth.service";
+import { GithubOauthService } from "../services/github-oauth.service";
 import { ApiError } from "../utils/api-error";
 import { ApiResponse } from "../utils/api-response";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 const REFRESH_COOKIE_PATH = "/auth";
+const OAUTH_STATE_COOKIE_NAME = "oauth_state";
+const FRONTEND_CALLBACK_PATH = "/auth/callback";
 
 export abstract class AuthController {
-  static async register(req: Request, res: Response): Promise<void> {
-    const { email, password } = req.body as { email: string; password: string };
-    const user = await AuthService.register(email, password);
+  static async githubAuthorize(_req: Request, res: Response): Promise<void> {
+    const { state, url } = await GithubOauthService.createAuthorization();
 
-    res
-      .status(StatusCodes.CREATED)
-      .json(
-        new ApiResponse(StatusCodes.CREATED, SuccessMessage.REGISTERED, user),
-      );
+    res.cookie(OAUTH_STATE_COOKIE_NAME, state, {
+      ...AuthController.oauthStateCookieOptions(),
+      maxAge: env.OAUTH_STATE_TTL_SECONDS * 1000,
+    });
+
+    res.redirect(StatusCodes.MOVED_TEMPORARILY, url);
   }
 
-  static async login(req: Request, res: Response): Promise<void> {
-    const { email, password } = req.body as { email: string; password: string };
-    const { user, accessToken, refreshToken } = await AuthService.login(
-      email,
-      password,
+  static async githubCallback(req: Request, res: Response): Promise<void> {
+    const stateCookie: unknown = req.cookies?.[OAUTH_STATE_COOKIE_NAME];
+    res.clearCookie(
+      OAUTH_STATE_COOKIE_NAME,
+      AuthController.oauthStateCookieOptions(),
     );
 
-    AuthController.setRefreshCookie(res, refreshToken.token);
+    try {
+      if (req.query["error"] !== undefined) {
+        throw new ApiError(
+          StatusCodes.UNAUTHORIZED,
+          ErrorMessage.GITHUB_AUTH_FAILED,
+          ErrorCode.GITHUB_AUTH_FAILED,
+        );
+      }
 
-    res.status(StatusCodes.OK).json(
-      new ApiResponse(StatusCodes.OK, SuccessMessage.LOGGED_IN, {
-        user,
-        ...AuthController.toAccessTokenPayload(accessToken),
-      }),
-    );
+      const { refreshToken } = await AuthService.completeGithubLogin(
+        AuthController.readQueryString(req, "code"),
+        AuthController.readQueryString(req, "state"),
+        typeof stateCookie === "string" ? stateCookie : undefined,
+      );
+
+      AuthController.setRefreshCookie(res, refreshToken.token);
+      res.redirect(
+        StatusCodes.MOVED_TEMPORARILY,
+        AuthController.frontendCallbackUrl(),
+      );
+    } catch (err) {
+      const errorCode =
+        err instanceof ApiError
+          ? err.errorCode
+          : ErrorCode.INTERNAL_SERVER_ERROR;
+
+      (err instanceof ApiError && err.isOperational
+        ? req.log.warn
+        : req.log.error
+      ).call(req.log, { err, errorCode }, "github sign-in failed");
+
+      res.redirect(
+        StatusCodes.MOVED_TEMPORARILY,
+        AuthController.frontendCallbackUrl(errorCode),
+      );
+    }
   }
 
   static async refresh(req: Request, res: Response): Promise<void> {
@@ -115,6 +146,28 @@ export abstract class AuthController {
       sameSite: "strict",
       path: REFRESH_COOKIE_PATH,
     };
+  }
+
+  private static oauthStateCookieOptions(): CookieOptions {
+    return { ...AuthController.cookieOptions(), sameSite: "lax" };
+  }
+
+  private static frontendCallbackUrl(errorCode?: ErrorCode): string {
+    const url = new URL(FRONTEND_CALLBACK_PATH, env.FRONTEND_URL);
+
+    if (errorCode) {
+      url.searchParams.set("error", errorCode);
+    }
+
+    return url.toString();
+  }
+
+  private static readQueryString(
+    req: Request,
+    name: string,
+  ): string | undefined {
+    const value = req.query[name];
+    return typeof value === "string" ? value : undefined;
   }
 
   private static setRefreshCookie(res: Response, token: string): void {

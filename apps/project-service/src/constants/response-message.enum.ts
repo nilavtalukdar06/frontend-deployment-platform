@@ -9,6 +9,7 @@ export enum SuccessMessage {
   PROJECT_RETRIEVED = "Project retrieved successfully",
   PROJECT_UPDATED = "Project updated successfully",
   PROJECT_DELETED = "Project deleted successfully",
+  REPOSITORIES_RETRIEVED = "Repositories retrieved successfully",
 }
 
 export enum ErrorMessage {
@@ -18,12 +19,13 @@ export enum ErrorMessage {
   FORBIDDEN = "You do not have permission to access this resource",
   NOT_FOUND = "The requested resource could not be found",
   CONFLICT = "The request could not be completed due to a conflict",
-  INVALID_REPOSITORY = "The repository does not exist or is not public",
+  INVALID_REPOSITORY = "The repository does not exist or you do not have push access to it",
+  REPOSITORY_ALREADY_IMPORTED = "This repository has already been imported as a project",
+  GITHUB_AUTH_REQUIRED = "GitHub authorization is missing or was revoked, please sign in with GitHub again",
   SOURCE_NOT_FOUND = "The branch or root directory was not found in the repository",
   UNSUPPORTED_FRAMEWORK = "Only Vite projects are supported",
   GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
-  PROJECT_NAME_ALREADY_EXISTS = "A project with this name already exists",
   TOO_MANY_REQUESTS = "Too many requests, please try again later",
   INTERNAL_SERVER_ERROR = "Something went wrong on our end",
   SERVICE_UNAVAILABLE = "Service is temporarily unavailable",

@@ -6,8 +6,8 @@ export interface PublicRoute {
 }
 
 export const publicRoutes: readonly PublicRoute[] = [
-  { method: "POST", path: "/auth/register" },
-  { method: "POST", path: "/auth/login" },
+  { method: "GET", path: "/auth/github" },
+  { method: "GET", path: "/auth/github/callback" },
   { method: "POST", path: "/auth/refresh" },
   { method: "POST", path: "/auth/logout" },
 ];

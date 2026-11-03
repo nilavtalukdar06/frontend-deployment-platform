@@ -45,6 +45,8 @@ const errorResponse = (
 const exampleProject = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
   slug: "brave-falcon",
+  githubRepositoryId: 715409281,
+  private: false,
   name: "marketing-site",
   description: "Public marketing website",
   repositoryUrl: "https://github.com/acme/marketing-site",
@@ -58,6 +60,18 @@ const exampleProject = {
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
 
+const exampleRepository = {
+  id: 715409281,
+  name: "marketing-site",
+  fullName: "acme/marketing-site",
+  description: "Public marketing website",
+  private: false,
+  defaultBranch: "main",
+  url: "https://github.com/acme/marketing-site",
+  pushedAt: "2026-11-02T18:04:11Z",
+  imported: false,
+};
+
 const sharedErrorResponses = {
   "429": ref("TooManyRequests"),
   "500": ref("InternalServerError"),
@@ -65,6 +79,12 @@ const sharedErrorResponses = {
 
 const protectedErrorResponses = {
   "401": ref("Unauthorized"),
+  ...sharedErrorResponses,
+};
+
+const githubErrorResponses = {
+  "401": ref("GithubUnauthorized"),
+  "503": ref("GithubUnavailable"),
   ...sharedErrorResponses,
 };
 
@@ -138,18 +158,16 @@ const schemas: Record<string, JsonObject> = {
   CreateProjectRequest: {
     type: "object",
     additionalProperties: false,
-    required: ["gitUrl"],
+    required: ["repositoryId"],
     description:
-      "Only the repository URL is supplied. The name, description, repository URL and branch of the project are taken from GitHub, the rest start with defaults and can be changed with `PATCH`.",
+      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub; the rest start with defaults and can be changed with `PATCH`.",
     properties: {
-      gitUrl: {
-        type: "string",
-        format: "uri",
-        maxLength: 2048,
-        pattern: "^https://(www\\.)?github\\.com/[^/]+/[^/]+?(\\.git)?/?$",
+      repositoryId: {
+        type: "integer",
+        minimum: 1,
         description:
-          "HTTPS URL of a public GitHub repository, such as `https://github.com/acme/marketing-site`. A trailing `.git` or `/` is accepted; credentials, query strings and fragments are rejected. The repository is looked up with the GitHub API and must exist and be public. It must also be a Vite project, checked with Vercel's framework detection against the default branch. The project name is the repository name, the description is the repository description, and the branch is the repository default branch.",
-        example: "https://github.com/acme/marketing-site",
+          "GitHub numeric repository id (`id` from `GET /projects/repositories`). The repository must be accessible with the user's GitHub token, the user must have push access, it must not be archived or disabled, and its default branch must be a Vite project.",
+        example: 715409281,
       },
     },
   },
@@ -179,6 +197,8 @@ const schemas: Record<string, JsonObject> = {
     required: [
       "id",
       "slug",
+      "githubRepositoryId",
+      "private",
       "name",
       "description",
       "repositoryUrl",
@@ -199,6 +219,15 @@ const schemas: Record<string, JsonObject> = {
         description:
           "Globally unique identifier made of exactly two lowercase words separated by a hyphen, such as `brave-falcon`. Generated randomly when the project is created (not derived from the repository name), never changes, and is not released when the project is deleted.",
         example: "brave-falcon",
+      },
+      githubRepositoryId: {
+        type: "integer",
+        description:
+          "GitHub numeric repository id. Stable across repository renames and transfers; a repository can be imported once per user.",
+      },
+      private: {
+        type: "boolean",
+        description: "Whether the repository was private when imported.",
       },
       name: { type: "string" },
       description: { type: ["string", "null"] },
@@ -238,6 +267,68 @@ const schemas: Record<string, JsonObject> = {
       },
       pagination: { $ref: "#/components/schemas/Pagination" },
     },
+  },
+  ImportableRepository: {
+    type: "object",
+    required: [
+      "id",
+      "name",
+      "fullName",
+      "description",
+      "private",
+      "defaultBranch",
+      "url",
+      "pushedAt",
+      "imported",
+    ],
+    properties: {
+      id: {
+        type: "integer",
+        description:
+          "GitHub numeric repository id; send it to `POST /projects`.",
+      },
+      name: { type: "string" },
+      fullName: { type: "string", example: "acme/marketing-site" },
+      description: { type: ["string", "null"] },
+      private: { type: "boolean" },
+      defaultBranch: { type: "string" },
+      url: { type: "string", format: "uri" },
+      pushedAt: { type: ["string", "null"], format: "date-time" },
+      imported: {
+        type: "boolean",
+        description:
+          "True when the user already has a (not deleted) project for this repository.",
+      },
+    },
+  },
+  ImportableRepositoryPage: {
+    type: "object",
+    required: ["items", "page", "hasNextPage"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/ImportableRepository" },
+        description:
+          "The Vite projects among the 30 repositories on this page. Can hold fewer than 30 items, or none, even when `hasNextPage` is true.",
+      },
+      page: { type: "integer", minimum: 1 },
+      hasNextPage: {
+        type: "boolean",
+        description: "Whether GitHub has another page of repositories.",
+      },
+    },
+  },
+  ImportableRepositoryPageResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: { $ref: "#/components/schemas/ImportableRepositoryPage" },
+        },
+      },
+    ],
   },
   HealthData: {
     type: "object",
@@ -326,8 +417,8 @@ const responses: Record<string, JsonObject> = {
       {
         errors: [],
         properties: {
-          gitUrl: {
-            errors: ["Invalid URL"],
+          repositoryId: {
+            errors: ["Invalid input: expected number, received string"],
           },
         },
       },
@@ -337,15 +428,41 @@ const responses: Record<string, JsonObject> = {
     `The \`${USER_ID_HEADER}\` header is missing or is not a UUID. Behind the api-gateway this cannot happen for a request with a valid bearer token.`,
     errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
   ),
+  GithubUnauthorized: {
+    description: `Either the \`${USER_ID_HEADER}\` header is missing or is not a UUID (\`UNAUTHORIZED\`), or the user's GitHub authorization is missing or was revoked on GitHub (\`GITHUB_AUTH_REQUIRED\`); the user must sign in with GitHub again.`,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        examples: {
+          missingUser: {
+            summary: "Missing user header",
+            value: errorExample(
+              401,
+              ErrorCode.UNAUTHORIZED,
+              ErrorMessage.UNAUTHORIZED,
+            ),
+          },
+          githubAuthRequired: {
+            summary: "GitHub token missing or revoked",
+            value: errorExample(
+              401,
+              ErrorCode.GITHUB_AUTH_REQUIRED,
+              ErrorMessage.GITHUB_AUTH_REQUIRED,
+            ),
+          },
+        },
+      },
+    },
+  },
   RepositoryRejected: {
     description:
-      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist on GitHub or is not public (the two are reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
+      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist, is not accessible with the user's GitHub token, the user has no push access, or it is archived or disabled (all reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
     content: {
       "application/json": {
         schema: { $ref: "#/components/schemas/ErrorResponse" },
         examples: {
           notPublic: {
-            summary: "Missing or private repository",
+            summary: "Missing repository or no push access",
             value: errorExample(
               422,
               ErrorCode.INVALID_REPOSITORY,
@@ -375,7 +492,7 @@ const responses: Record<string, JsonObject> = {
     },
   },
   GithubUnavailable: errorResponse(
-    "The repository could not be verified because the GitHub API timed out, was unreachable, was rate limited or returned an unexpected response.",
+    "GitHub could not be used: the GitHub API timed out, was unreachable, rate limited the user or returned an unexpected response. The same status with `SERVICE_UNAVAILABLE` and the generic message is returned when the auth-service, which holds the user's GitHub token, cannot be reached.",
     errorExample(
       503,
       ErrorCode.SERVICE_UNAVAILABLE,
@@ -386,12 +503,12 @@ const responses: Record<string, JsonObject> = {
     "No project with this id exists for the authenticated user. Projects owned by other users and deleted projects are reported the same way.",
     errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.PROJECT_NOT_FOUND),
   ),
-  NameConflict: errorResponse(
-    "The user already has a project with this name (the repository name, for projects created from a repository).",
+  RepositoryAlreadyImported: errorResponse(
+    "The user already has a project for this repository.",
     errorExample(
       409,
-      ErrorCode.CONFLICT,
-      ErrorMessage.PROJECT_NAME_ALREADY_EXISTS,
+      ErrorCode.REPOSITORY_ALREADY_IMPORTED,
+      ErrorMessage.REPOSITORY_ALREADY_IMPORTED,
     ),
   ),
   TooManyRequests: errorResponse(
@@ -450,7 +567,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Validates `gitUrl` with Zod, looks the repository up with the GitHub API and requires it to be public, then detects the framework from the repository files (no clone) and requires it to be Vite. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409` is returned only after repeated collisions.",
+    "Imports a repository picked from `GET /projects/repositories`. Using the user's GitHub token (fetched from the auth-service), the repository is looked up by id and must be accessible with push access, then the framework is detected from its default branch (no clone) and must be Vite. On success the project is stored with a unique two-word slug and returned. If a random slug is already taken a new one is generated; `409 CONFLICT` is returned only after repeated collisions.",
   security: userIdSecurity,
   requestBody: {
     required: true,
@@ -471,10 +588,40 @@ const createProject: JsonObject = {
       }),
     },
     "400": ref("ValidationError"),
-    "409": ref("NameConflict"),
+    "409": ref("RepositoryAlreadyImported"),
     "422": ref("RepositoryRejected"),
-    "503": ref("GithubUnavailable"),
-    ...protectedErrorResponses,
+    ...githubErrorResponses,
+  },
+};
+
+const listRepositories: JsonObject = {
+  tags: ["Projects"],
+  operationId: "listImportableRepositories",
+  summary: "List the user's GitHub repositories that can be imported",
+  description:
+    "The \"add project\" picker. Uses the user's GitHub token (fetched from the auth-service) to read one page of 30 of the user's repositories, newest push first, including repositories owned by the user, shared as a collaborator, or in organizations the user belongs to. Only repositories with push access that are not archived or disabled are considered, and only those whose default branch is a Vite project are returned (Vercel framework detection, at most 6 repositories checked in parallel). Detection results are cached in Redis for 24 hours per repository, branch and last push, so a repository is only re-checked after a new push. Repositories without any commit are skipped.",
+  security: userIdSecurity,
+  parameters: [
+    {
+      name: "page",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 1 },
+      description: "GitHub page of 30 repositories.",
+    },
+  ],
+  responses: {
+    "200": {
+      description: "The Vite repositories on this page.",
+      content: jsonContent("ImportableRepositoryPageResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.REPOSITORIES_RETRIEVED,
+        data: { items: [exampleRepository], page: 1, hasNextPage: true },
+      }),
+    },
+    "400": ref("ValidationError"),
+    ...githubErrorResponses,
   },
 };
 
@@ -567,10 +714,8 @@ const updateProject: JsonObject = {
     },
     "400": ref("ValidationError"),
     "404": ref("ProjectNotFound"),
-    "409": ref("NameConflict"),
     "422": ref("RepositoryRejected"),
-    "503": ref("GithubUnavailable"),
-    ...protectedErrorResponses,
+    ...githubErrorResponses,
   },
 };
 
@@ -602,7 +747,7 @@ export const openApiDocument: JsonObject = {
   info: {
     title: "Project Service API",
     version: "1.0.0",
-    description: `Project management for the React deployment platform. A project describes how to build a Vite app from a public GitHub repository and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` route requires that header to be a UUID and only ever reads or changes projects owned by that user. Unknown routes return a \`404\` with the standard error envelope.`,
+    description: `Project management for the React deployment platform. A project describes how to build a Vite app from one of the user's GitHub repositories (public or private) and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` route requires that header to be a UUID and only ever reads or changes projects owned by that user.\n\n**GitHub access.** Routes that talk to GitHub fetch the user's GitHub OAuth token from the auth-service (\`GET /internal/users/{id}/github-token\`, authenticated with \`INTERNAL_API_KEY\`) and call GitHub with it, so private repositories are supported and GitHub's per-user rate limit applies. Unknown routes return a \`404\` with the standard error envelope.`,
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
@@ -615,6 +760,7 @@ export const openApiDocument: JsonObject = {
   paths: {
     "/health": { get: health },
     "/projects": { post: createProject, get: listProjects },
+    "/projects/repositories": { get: listRepositories },
     "/projects/{id}": {
       get: getProject,
       patch: updateProject,

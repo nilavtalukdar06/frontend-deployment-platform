@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../lib/postgres";
 import { projects, type NewProject, type Project } from "../db/schema";
 
@@ -8,6 +8,8 @@ export type ProjectChanges = Partial<
     | "id"
     | "userId"
     | "slug"
+    | "githubRepositoryId"
+    | "private"
     | "repositoryUrl"
     | "framework"
     | "createdAt"
@@ -51,6 +53,28 @@ export abstract class ProjectRepository {
       .limit(1);
 
     return project;
+  }
+
+  static async findImportedRepositoryIds(
+    userId: string,
+    githubRepositoryIds: number[],
+  ): Promise<number[]> {
+    if (githubRepositoryIds.length === 0) {
+      return [];
+    }
+
+    const rows = await db
+      .select({ githubRepositoryId: projects.githubRepositoryId })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.userId, userId),
+          inArray(projects.githubRepositoryId, githubRepositoryIds),
+          isNull(projects.deletedAt),
+        ),
+      );
+
+    return rows.map((row) => row.githubRepositoryId);
   }
 
   static async listByUser(

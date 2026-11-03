@@ -8,6 +8,7 @@ type JsonObject = Record<string, unknown>;
 type Headers = Record<string, JsonObject>;
 
 const REFRESH_COOKIE_NAME = "refresh_token";
+const OAUTH_STATE_COOKIE_NAME = "oauth_state";
 
 const jsonContent = (schemaName: string, example?: unknown) => ({
   "application/json": {
@@ -43,7 +44,10 @@ const errorResponse = (
 
 const exampleUser = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  githubLogin: "janedoe",
+  name: "Jane Doe",
   email: "jane.doe@example.com",
+  avatarUrl: "https://avatars.githubusercontent.com/u/583231?v=4",
   status: "active",
   lastLoginAt: "2026-11-03T09:30:00.000Z",
   createdAt: "2026-10-20T12:00:00.000Z",
@@ -75,62 +79,42 @@ const sharedErrorResponses = {
   "500": ref("InternalServerError"),
 };
 
-const emailSchema: JsonObject = {
-  type: "string",
-  format: "email",
-  minLength: 3,
-  maxLength: 320,
-  description:
-    "Trimmed and lower-cased by the service before validation and storage.",
-  example: "jane.doe@example.com",
-};
-
 const schemas: Record<string, JsonObject> = {
-  RegisterRequest: {
-    type: "object",
-    additionalProperties: false,
-    required: ["email", "password"],
-    properties: {
-      email: emailSchema,
-      password: {
-        type: "string",
-        format: "password",
-        minLength: 10,
-        maxLength: 128,
-        example: "correct-horse-battery",
-      },
-    },
-  },
-  LoginRequest: {
-    type: "object",
-    additionalProperties: false,
-    required: ["email", "password"],
-    properties: {
-      email: emailSchema,
-      password: {
-        type: "string",
-        format: "password",
-        minLength: 1,
-        maxLength: 128,
-        example: "correct-horse-battery",
-      },
-    },
-  },
   UserStatus: {
     type: "string",
     enum: ["active", "suspended", "deactivated"],
   },
   User: {
     type: "object",
-    required: ["id", "email", "status", "lastLoginAt", "createdAt"],
+    required: [
+      "id",
+      "githubLogin",
+      "name",
+      "email",
+      "avatarUrl",
+      "status",
+      "lastLoginAt",
+      "createdAt",
+    ],
     properties: {
       id: { type: "string", format: "uuid" },
-      email: { type: "string", format: "email" },
+      githubLogin: {
+        type: "string",
+        description: "GitHub username, refreshed on every sign-in.",
+      },
+      name: { type: ["string", "null"] },
+      email: {
+        type: ["string", "null"],
+        format: "email",
+        description:
+          "Primary verified email of the GitHub account, lower-cased. Null when GitHub has none.",
+      },
+      avatarUrl: { type: ["string", "null"], format: "uri" },
       status: { $ref: "#/components/schemas/UserStatus" },
       lastLoginAt: {
         type: ["string", "null"],
         format: "date-time",
-        description: "Null until the first successful login.",
+        description: "Time of the last GitHub sign-in.",
       },
       createdAt: { type: "string", format: "date-time" },
     },
@@ -150,18 +134,6 @@ const schemas: Record<string, JsonObject> = {
         example: 900,
       },
     },
-  },
-  LoginData: {
-    type: "object",
-    required: ["user", "accessToken", "tokenType", "expiresIn"],
-    allOf: [
-      { $ref: "#/components/schemas/AccessTokenPayload" },
-      {
-        type: "object",
-        required: ["user"],
-        properties: { user: { $ref: "#/components/schemas/User" } },
-      },
-    ],
   },
   HealthData: {
     type: "object",
@@ -195,13 +167,25 @@ const schemas: Record<string, JsonObject> = {
       },
     ],
   },
-  LoginResponse: {
+  GithubTokenResponse: {
     allOf: [
       { $ref: "#/components/schemas/MessageResponse" },
       {
         type: "object",
         required: ["data"],
-        properties: { data: { $ref: "#/components/schemas/LoginData" } },
+        properties: {
+          data: {
+            type: "object",
+            required: ["accessToken"],
+            properties: {
+              accessToken: {
+                type: "string",
+                description:
+                  "Decrypted GitHub OAuth access token of the user (scopes `repo`, `read:user`, `user:email`).",
+              },
+            },
+          },
+        },
       },
     ],
   },
@@ -241,7 +225,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `ACCOUNT_LOCKED` it is `{ retryAfterSeconds }`; for `NOT_FOUND` it is `{ path }`.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `NOT_FOUND` it is `{ path }`.",
       },
       stack: {
         type: "string",
@@ -254,7 +238,7 @@ const schemas: Record<string, JsonObject> = {
 
 const responses: Record<string, JsonObject> = {
   ValidationError: errorResponse(
-    "The request body failed validation.",
+    "The path parameters failed validation.",
     errorExample(
       400,
       ErrorCode.VALIDATION_ERROR,
@@ -262,15 +246,15 @@ const responses: Record<string, JsonObject> = {
       {
         errors: [],
         properties: {
-          password: {
-            errors: ["Too small: expected string to have >=10 characters"],
+          id: {
+            errors: ["Invalid UUID"],
           },
         },
       },
     ),
   ),
   TooManyRequests: errorResponse(
-    "The per-client rate limit was exceeded (`RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`). Standard `RateLimit-*` headers are returned on every response.",
+    "The per-client rate limit was exceeded (`RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`). Standard `RateLimit-*` headers are returned on every response. Routes under `/internal` are not rate limited.",
     errorExample(
       429,
       ErrorCode.TOO_MANY_REQUESTS,
@@ -289,6 +273,11 @@ const responses: Record<string, JsonObject> = {
 
 const bearerSecurity = [{ bearerAuth: [] }];
 const refreshCookieSecurity = [{ refreshCookie: [] }];
+const internalApiKeySecurity = [{ internalApiKey: [] }];
+
+const redirectHeader = (description: string): Headers => ({
+  Location: { description, schema: { type: "string", format: "uri" } },
+});
 
 const health: JsonObject = {
   security: [],
@@ -321,93 +310,72 @@ const health: JsonObject = {
   },
 };
 
-const register: JsonObject = {
+const githubAuthorize: JsonObject = {
   security: [],
   tags: ["Auth"],
-  operationId: "register",
-  summary: "Create an account",
-  requestBody: {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/RegisterRequest" },
+  operationId: "startGithubSignIn",
+  summary: "Start GitHub sign-in",
+  description: `Open in the browser (a top-level navigation, not \`fetch\`). Creates a single-use \`state\` and a PKCE verifier (stored in Redis for \`OAUTH_STATE_TTL_SECONDS\`), sets the \`${OAUTH_STATE_COOKIE_NAME}\` cookie and redirects to GitHub, requesting the \`repo\`, \`read:user\` and \`user:email\` scopes. The \`repo\` scope lets the platform list and read the user's public and private repositories.`,
+  responses: {
+    "302": {
+      description: "Redirect to the GitHub authorization page.",
+      headers: {
+        ...redirectHeader(
+          "`https://github.com/login/oauth/authorize?client_id=…&redirect_uri=…&scope=repo read:user user:email&state=…&code_challenge=…&code_challenge_method=S256`",
+        ),
+        "Set-Cookie": {
+          description: `Sets the \`${OAUTH_STATE_COOKIE_NAME}\` cookie (HttpOnly, SameSite=Lax, Path=/auth, Secure in production, expires after \`OAUTH_STATE_TTL_SECONDS\`).`,
+          schema: { type: "string" },
+        },
       },
     },
-  },
-  responses: {
-    "201": {
-      description: "Account created.",
-      content: jsonContent("UserResponse", {
-        success: true,
-        statusCode: 201,
-        message: SuccessMessage.REGISTERED,
-        data: exampleUser,
-      }),
-    },
-    "400": ref("ValidationError"),
-    "409": errorResponse(
-      "An account with this email already exists.",
-      errorExample(
-        409,
-        ErrorCode.CONFLICT,
-        ErrorMessage.EMAIL_ALREADY_REGISTERED,
-      ),
-    ),
     ...sharedErrorResponses,
   },
 };
 
-const login: JsonObject = {
+const githubCallback: JsonObject = {
   security: [],
   tags: ["Auth"],
-  operationId: "login",
-  summary: "Log in with email and password",
-  description:
-    "Returns a short-lived access token in the body and sets the refresh token as an HttpOnly cookie. After `LOGIN_MAX_ATTEMPTS` failed attempts within `LOGIN_ATTEMPT_WINDOW_SECONDS` the email is locked for `LOGIN_LOCK_SECONDS`.",
-  requestBody: {
-    required: true,
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/LoginRequest" },
-      },
+  operationId: "completeGithubSignIn",
+  summary: "GitHub sign-in callback",
+  description: `GitHub redirects the browser here. The \`state\` query parameter must match the \`${OAUTH_STATE_COOKIE_NAME}\` cookie and an unused state in Redis. The code is exchanged with PKCE, the GitHub profile and primary verified email are read, and the user is created or updated by GitHub id. The GitHub access token is stored encrypted (AES-256-GCM). A session is started and the browser is redirected to \`FRONTEND_URL/auth/callback\` with the \`${REFRESH_COOKIE_NAME}\` cookie set; the frontend then calls \`POST /auth/refresh\` to get an access token. This route never responds with JSON: on any failure it redirects to \`FRONTEND_URL/auth/callback?error=<ERROR_CODE>\` with \`INVALID_OAUTH_STATE\` (missing, mismatched, expired or reused state, or missing code), \`GITHUB_AUTH_FAILED\` (the user cancelled, the code exchange or profile lookup failed, or the \`repo\` scope was not granted), \`FORBIDDEN\` (the account is suspended or deactivated), \`SERVICE_UNAVAILABLE\` (GitHub unreachable) or \`INTERNAL_SERVER_ERROR\`. The \`${OAUTH_STATE_COOKIE_NAME}\` cookie is always cleared.`,
+  parameters: [
+    {
+      name: "code",
+      in: "query",
+      required: false,
+      schema: { type: "string" },
+      description: "Authorization code issued by GitHub.",
     },
-  },
+    {
+      name: "state",
+      in: "query",
+      required: false,
+      schema: { type: "string" },
+      description: "The state created by `GET /auth/github`.",
+    },
+    {
+      name: "error",
+      in: "query",
+      required: false,
+      schema: { type: "string" },
+      description: "Set by GitHub when the user cancels, e.g. `access_denied`.",
+    },
+  ],
   responses: {
-    "200": {
-      description: "Logged in.",
-      headers: refreshCookieHeader,
-      content: jsonContent("LoginResponse", {
-        success: true,
-        statusCode: 200,
-        message: SuccessMessage.LOGGED_IN,
-        data: { user: exampleUser, ...exampleTokenPayload },
-      }),
-    },
-    "400": ref("ValidationError"),
-    "401": errorResponse(
-      "Unknown email or wrong password.",
-      errorExample(
-        401,
-        ErrorCode.INVALID_CREDENTIALS,
-        ErrorMessage.INVALID_CREDENTIALS,
-      ),
-    ),
-    "403": errorResponse(
-      "The credentials are valid but the account is not active.",
-      errorExample(403, ErrorCode.FORBIDDEN, ErrorMessage.ACCOUNT_INACTIVE),
-    ),
-    "423": errorResponse(
-      "Too many failed attempts; the account is temporarily locked.",
-      errorExample(423, ErrorCode.ACCOUNT_LOCKED, ErrorMessage.ACCOUNT_LOCKED, {
-        retryAfterSeconds: 900,
-      }),
-      {
-        "Retry-After": {
-          description: "Seconds until the lock expires.",
-          schema: { type: "integer", example: 900 },
+    "302": {
+      description:
+        "Redirect to the frontend. On success the refresh cookie is set; on failure the `error` query parameter carries the error code.",
+      headers: {
+        ...redirectHeader(
+          "`FRONTEND_URL/auth/callback` on success, `FRONTEND_URL/auth/callback?error=INVALID_OAUTH_STATE` (or another error code) on failure.",
+        ),
+        "Set-Cookie": {
+          description: `On success sets the \`${REFRESH_COOKIE_NAME}\` cookie (HttpOnly, SameSite=Strict, Path=/auth, Secure in production) for \`REFRESH_TOKEN_TTL_SECONDS\`. Always clears the \`${OAUTH_STATE_COOKIE_NAME}\` cookie.`,
+          schema: { type: "string" },
         },
       },
-    ),
+    },
     ...sharedErrorResponses,
   },
 };
@@ -416,7 +384,7 @@ const refresh: JsonObject = {
   tags: ["Auth"],
   operationId: "refreshTokens",
   summary: "Rotate the refresh token and issue a new access token",
-  description: `Reads the refresh token from the \`${REFRESH_COOKIE_NAME}\` cookie, rotates it and returns a new access token. Re-using an already rotated refresh token revokes the whole session.`,
+  description: `Used right after GitHub sign-in to get the first access token, and whenever the access token expires. Reads the refresh token from the \`${REFRESH_COOKIE_NAME}\` cookie, rotates it and returns a new access token. Re-using an already rotated refresh token revokes the whole session.`,
   security: refreshCookieSecurity,
   responses: {
     "200": {
@@ -481,29 +449,73 @@ const me: JsonObject = {
   },
 };
 
+const githubToken: JsonObject = {
+  tags: ["Internal"],
+  operationId: "getUserGithubToken",
+  summary: "Get a user's GitHub access token",
+  description:
+    "Service-to-service only. Used by the project-service to call GitHub on behalf of a user. Not exposed by the api-gateway, which only proxies `/auth` and `/projects`, and not rate limited. Requires the shared `INTERNAL_API_KEY` in the `x-internal-api-key` header (compared in constant time).",
+  security: internalApiKeySecurity,
+  parameters: [
+    {
+      name: "id",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+  ],
+  responses: {
+    "200": {
+      description: "The decrypted GitHub access token.",
+      content: jsonContent("GithubTokenResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.GITHUB_TOKEN,
+        data: { accessToken: "gho_16C7e42F292c6912E7710c838347Ae178B4a" },
+      }),
+    },
+    "400": ref("ValidationError"),
+    "401": errorResponse(
+      "The `x-internal-api-key` header is missing or wrong.",
+      errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
+    ),
+    "404": errorResponse(
+      "No active user exists with this id.",
+      errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.NOT_FOUND),
+    ),
+    "500": sharedErrorResponses["500"],
+  },
+};
+
 export const openApiDocument: JsonObject = {
   openapi: "3.1.0",
   info: {
     title: "Auth Service API",
     version: "1.0.0",
     description:
-      "Token-based stateless authentication for the React deployment platform. Access tokens are short-lived JWTs sent as Bearer tokens; refresh tokens are rotated and delivered as an HttpOnly cookie scoped to `/auth`. Unknown routes return a `404` with the standard error envelope.",
+      "Authentication for the React deployment platform. Users sign in with GitHub OAuth only (`GET /auth/github`); there is no email/password login. After sign-in the platform keeps its own stateless session: access tokens are short-lived JWTs sent as Bearer tokens, and refresh tokens are rotated and delivered as an HttpOnly cookie scoped to `/auth`. The GitHub access token is stored encrypted and only handed to other services through `/internal`. Unknown routes return a `404` with the standard error envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
     { name: "Health", description: "Liveness and dependency checks." },
     {
       name: "Auth",
-      description: "Registration, sessions and the current user.",
+      description: "GitHub sign-in, sessions and the current user.",
+    },
+    {
+      name: "Internal",
+      description:
+        "Service-to-service routes protected by `INTERNAL_API_KEY`. Not reachable through the api-gateway.",
     },
   ],
   paths: {
     "/health": { get: health },
-    "/auth/register": { post: register },
-    "/auth/login": { post: login },
+    "/auth/github": { get: githubAuthorize },
+    "/auth/github/callback": { get: githubCallback },
     "/auth/refresh": { post: refresh },
     "/auth/logout": { post: logout },
     "/auth/me": { get: me },
+    "/internal/users/{id}/github-token": { get: githubToken },
   },
   components: {
     securitySchemes: {
@@ -511,15 +523,20 @@ export const openApiDocument: JsonObject = {
         type: "http",
         scheme: "bearer",
         bearerFormat: "JWT",
-        description:
-          "Access token returned by `/auth/login` or `/auth/refresh`.",
+        description: "Access token returned by `/auth/refresh`.",
+      },
+      internalApiKey: {
+        type: "apiKey",
+        in: "header",
+        name: "x-internal-api-key",
+        description: "Shared `INTERNAL_API_KEY` between internal services.",
       },
       refreshCookie: {
         type: "apiKey",
         in: "cookie",
         name: REFRESH_COOKIE_NAME,
         description:
-          "HttpOnly refresh token cookie set by `/auth/login` and `/auth/refresh`. Browsers send it automatically to `/auth/*`.",
+          "HttpOnly refresh token cookie set by `/auth/github/callback` and `/auth/refresh`. Browsers send it automatically to `/auth/*`.",
       },
     },
     schemas,

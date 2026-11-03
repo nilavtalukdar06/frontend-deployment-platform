@@ -7,11 +7,7 @@ export abstract class RedisKeys {
     return `auth:blacklist:${tokenId}`;
   }
 
-  static loginAttempts(emailHash: string): string {
-    return `auth:login-attempts:${emailHash}`;
-  }
-
-  static loginLock(emailHash: string): string {
-    return `auth:login-lock:${emailHash}`;
+  static oauthState(state: string): string {
+    return `auth:oauth-state:${state}`;
   }
 }

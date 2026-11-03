@@ -24,13 +24,19 @@ export const env = createEnv({
       .positive()
       .default(7 * 24 * 60 * 60),
 
-    LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
-    LOGIN_ATTEMPT_WINDOW_SECONDS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(900),
-    LOGIN_LOCK_SECONDS: z.coerce.number().int().positive().default(900),
+    GITHUB_CLIENT_ID: z.string().min(1),
+    GITHUB_CLIENT_SECRET: z.string().min(1),
+    GITHUB_CALLBACK_URL: z.string().url(),
+    GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+    GITHUB_TOKEN_ENCRYPTION_KEY: z
+      .string()
+      .refine((value) => Buffer.from(value, "base64").length === 32, {
+        message: "must be 32 bytes encoded as base64",
+      }),
+    OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+    FRONTEND_URL: z.string().url(),
+
+    INTERNAL_API_KEY: z.string().min(32),
 
     RATE_LIMIT_WINDOW_MS: z.coerce
       .number()

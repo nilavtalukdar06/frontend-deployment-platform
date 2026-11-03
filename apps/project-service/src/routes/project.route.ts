@@ -20,6 +20,11 @@ projectRouter.get(
   asyncHandler(ProjectController.list),
 );
 projectRouter.get(
+  "/repositories",
+  validate(ProjectValidator.repositories),
+  asyncHandler(ProjectController.listRepositories),
+);
+projectRouter.get(
   "/:id",
   validate(ProjectValidator.get),
   asyncHandler(ProjectController.get),
