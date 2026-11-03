@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
-import { authService } from "../config/services";
+import { authService, projectService } from "../config/services";
 import { checkRedisConnection } from "../lib/redis";
 import { checkServiceHealth } from "../lib/service-health";
 import { ApiResponse } from "../utils/api-response";
@@ -15,12 +15,15 @@ export const healthRouter = Router();
 healthRouter.get(
   "/health",
   asyncHandler(async (_req, res) => {
-    const [redisHealthy, authServiceHealthy] = await Promise.all([
-      checkRedisConnection(),
-      checkServiceHealth(authService),
-    ]);
+    const [redisHealthy, authServiceHealthy, projectServiceHealthy] =
+      await Promise.all([
+        checkRedisConnection(),
+        checkServiceHealth(authService),
+        checkServiceHealth(projectService),
+      ]);
 
-    const isHealthy = redisHealthy && authServiceHealthy;
+    const isHealthy =
+      redisHealthy && authServiceHealthy && projectServiceHealthy;
     const statusCode = isHealthy
       ? StatusCodes.OK
       : StatusCodes.SERVICE_UNAVAILABLE;
@@ -32,6 +35,7 @@ healthRouter.get(
         gateway: "up",
         redis: redisHealthy ? "up" : "down",
         authService: authServiceHealthy ? "up" : "down",
+        projectService: projectServiceHealthy ? "up" : "down",
         uptime: process.uptime(),
       },
     );

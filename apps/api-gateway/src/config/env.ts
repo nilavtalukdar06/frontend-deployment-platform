@@ -9,6 +9,7 @@ export const env = createEnv({
     PORT: z.coerce.number().int().positive().default(3000),
 
     AUTH_SERVICE_URL: z.string().url().default("http://localhost:4000"),
+    PROJECT_SERVICE_URL: z.string().url().default("http://localhost:4001"),
 
     REDIS_URL: z.string().url(),
 

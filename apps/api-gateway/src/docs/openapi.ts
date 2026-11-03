@@ -23,6 +23,25 @@ const AuthServiceMessage = {
   CURRENT_USER: "Current user retrieved successfully",
 } as const;
 
+const ProjectServiceMessage = {
+  PROJECT_NOT_FOUND: "The requested project could not be found",
+  PROJECT_NAME_ALREADY_EXISTS: "A project with this name already exists",
+  PROJECT_CREATED: "Project created successfully",
+  PROJECTS_RETRIEVED: "Projects retrieved successfully",
+  PROJECT_RETRIEVED: "Project retrieved successfully",
+  PROJECT_UPDATED: "Project updated successfully",
+  PROJECT_DELETED: "Project deleted successfully",
+} as const;
+
+const PROJECT_FRAMEWORKS = [
+  "vite",
+  "create-react-app",
+  "next",
+  "remix",
+  "gatsby",
+  "other",
+] as const;
+
 const jsonContent = (schemaName: string, example?: unknown) => ({
   "application/json": {
     schema: { $ref: `#/components/schemas/${schemaName}` },
@@ -70,6 +89,21 @@ const exampleTokenPayload = {
   expiresIn: 900,
 };
 
+const exampleProject = {
+  id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  name: "marketing-site",
+  description: "Public marketing website",
+  repositoryUrl: "https://github.com/acme/marketing-site",
+  branch: "main",
+  framework: "vite",
+  rootDirectory: ".",
+  installCommand: "npm install",
+  buildCommand: "npm run build",
+  outputDirectory: "dist",
+  createdAt: "2026-11-03T09:30:00.000Z",
+  updatedAt: "2026-11-03T09:30:00.000Z",
+};
+
 const refreshCookieHeader: Headers = {
   "Set-Cookie": {
     description: `Forwarded unchanged from the auth-service. Sets the \`${REFRESH_COOKIE_NAME}\` cookie (HttpOnly, SameSite=Strict, Path=/auth, Secure in production).`,
@@ -105,6 +139,67 @@ const emailSchema: JsonObject = {
   description:
     "Trimmed and lower-cased by the service before validation and storage.",
   example: "jane.doe@example.com",
+};
+
+const relativeDirectorySchema = (description: string): JsonObject => ({
+  type: "string",
+  minLength: 1,
+  maxLength: 255,
+  description: `${description} Trimmed before validation. Must be relative: it cannot start with \`/\` or contain a \`..\` segment.`,
+});
+
+const projectProperties: Record<string, JsonObject> = {
+  name: {
+    type: "string",
+    minLength: 1,
+    maxLength: 100,
+    description:
+      "Trimmed before validation. Unique per user among projects that are not deleted.",
+    example: "marketing-site",
+  },
+  repositoryUrl: {
+    type: "string",
+    format: "uri",
+    maxLength: 2048,
+    pattern: "^https://",
+    description: "HTTPS URL of the Git repository.",
+    example: "https://github.com/acme/marketing-site",
+  },
+  branch: {
+    type: "string",
+    minLength: 1,
+    maxLength: 255,
+    pattern: "^[A-Za-z0-9._/-]+$",
+    description: "Branch to build. Defaults to `main`.",
+    example: "main",
+  },
+  framework: { $ref: "#/components/schemas/ProjectFramework" },
+  rootDirectory: {
+    ...relativeDirectorySchema(
+      "Directory of the repository that contains the app. Defaults to `.`.",
+    ),
+    example: ".",
+  },
+  installCommand: {
+    type: "string",
+    minLength: 1,
+    maxLength: 500,
+    description: "Defaults to `npm install`.",
+    example: "npm install",
+  },
+  buildCommand: {
+    type: "string",
+    minLength: 1,
+    maxLength: 500,
+    description: "Defaults to `npm run build`.",
+    example: "npm run build",
+  },
+  outputDirectory: {
+    ...relativeDirectorySchema(
+      "Directory, relative to `rootDirectory`, that contains the build output. Defaults to `dist`.",
+    ),
+    example: "dist",
+  },
 };
 
 const schemas: Record<string, JsonObject> = {
@@ -185,9 +280,115 @@ const schemas: Record<string, JsonObject> = {
       },
     ],
   },
+  ProjectFramework: {
+    type: "string",
+    enum: [...PROJECT_FRAMEWORKS],
+    description: "Defaults to `vite`.",
+  },
+  CreateProjectRequest: {
+    type: "object",
+    additionalProperties: false,
+    required: ["name", "repositoryUrl"],
+    properties: {
+      name: projectProperties["name"],
+      description: {
+        type: "string",
+        maxLength: 500,
+        description: "Trimmed before validation.",
+        example: "Public marketing website",
+      },
+      repositoryUrl: projectProperties["repositoryUrl"],
+      branch: projectProperties["branch"],
+      framework: projectProperties["framework"],
+      rootDirectory: projectProperties["rootDirectory"],
+      installCommand: projectProperties["installCommand"],
+      buildCommand: projectProperties["buildCommand"],
+      outputDirectory: projectProperties["outputDirectory"],
+    },
+  },
+  UpdateProjectRequest: {
+    type: "object",
+    additionalProperties: false,
+    minProperties: 1,
+    description:
+      "Partial update. At least one field is required; fields that are omitted stay unchanged.",
+    properties: {
+      name: projectProperties["name"],
+      description: {
+        type: ["string", "null"],
+        maxLength: 500,
+        description: "Trimmed before validation. Send `null` to clear it.",
+        example: "Public marketing website",
+      },
+      repositoryUrl: projectProperties["repositoryUrl"],
+      branch: projectProperties["branch"],
+      framework: projectProperties["framework"],
+      rootDirectory: projectProperties["rootDirectory"],
+      installCommand: projectProperties["installCommand"],
+      buildCommand: projectProperties["buildCommand"],
+      outputDirectory: projectProperties["outputDirectory"],
+    },
+  },
+  Project: {
+    type: "object",
+    required: [
+      "id",
+      "name",
+      "description",
+      "repositoryUrl",
+      "branch",
+      "framework",
+      "rootDirectory",
+      "installCommand",
+      "buildCommand",
+      "outputDirectory",
+      "createdAt",
+      "updatedAt",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      name: { type: "string" },
+      description: { type: ["string", "null"] },
+      repositoryUrl: { type: "string", format: "uri" },
+      branch: { type: "string" },
+      framework: { $ref: "#/components/schemas/ProjectFramework" },
+      rootDirectory: { type: "string" },
+      installCommand: { type: "string" },
+      buildCommand: { type: "string" },
+      outputDirectory: { type: "string" },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  Pagination: {
+    type: "object",
+    required: ["page", "limit", "total", "totalPages"],
+    properties: {
+      page: { type: "integer", minimum: 1, example: 1 },
+      limit: { type: "integer", minimum: 1, maximum: 100, example: 20 },
+      total: {
+        type: "integer",
+        minimum: 0,
+        description: "Number of projects owned by the user.",
+        example: 1,
+      },
+      totalPages: { type: "integer", minimum: 0, example: 1 },
+    },
+  },
+  ProjectList: {
+    type: "object",
+    required: ["items", "pagination"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/Project" },
+      },
+      pagination: { $ref: "#/components/schemas/Pagination" },
+    },
+  },
   HealthData: {
     type: "object",
-    required: ["gateway", "redis", "authService", "uptime"],
+    required: ["gateway", "redis", "authService", "projectService", "uptime"],
     properties: {
       gateway: { type: "string", enum: ["up"] },
       redis: {
@@ -201,6 +402,12 @@ const schemas: Record<string, JsonObject> = {
         enum: ["up", "down"],
         description:
           "Result of `GET /health` on the auth-service, treated as down on a non-2xx response, a connection error or after `HEALTH_CHECK_TIMEOUT_MS`.",
+      },
+      projectService: {
+        type: "string",
+        enum: ["up", "down"],
+        description:
+          "Result of `GET /health` on the project-service, treated as down on a non-2xx response, a connection error or after `HEALTH_CHECK_TIMEOUT_MS`.",
       },
       uptime: {
         type: "number",
@@ -250,6 +457,26 @@ const schemas: Record<string, JsonObject> = {
       },
     ],
   },
+  ProjectResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: { data: { $ref: "#/components/schemas/Project" } },
+      },
+    ],
+  },
+  ProjectListResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: { data: { $ref: "#/components/schemas/ProjectList" } },
+      },
+    ],
+  },
   HealthResponse: {
     allOf: [
       { $ref: "#/components/schemas/MessageResponse" },
@@ -274,7 +501,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `ACCOUNT_LOCKED` it is `{ retryAfterSeconds }`; for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service are forwarded unchanged.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `ACCOUNT_LOCKED` it is `{ retryAfterSeconds }`; for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service and project-service are forwarded unchanged.",
       },
       stack: {
         type: "string",
@@ -303,7 +530,7 @@ const responses: Record<string, JsonObject> = {
     ),
   ),
   TooManyRequests: errorResponse(
-    "The per-client rate limit was exceeded, either at the gateway or at the auth-service. The gateway applies `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every route and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `/auth/register`, `/auth/login` and `/auth/refresh`. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
+    "The per-client rate limit was exceeded, either at the gateway or at an upstream service. The gateway applies `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every route and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `/auth/register`, `/auth/login` and `/auth/refresh`. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
     errorExample(
       429,
       ErrorCode.TOO_MANY_REQUESTS,
@@ -316,6 +543,22 @@ const responses: Record<string, JsonObject> = {
       500,
       ErrorCode.INTERNAL_SERVER_ERROR,
       ErrorMessage.INTERNAL_SERVER_ERROR,
+    ),
+  ),
+  ProjectNotFound: errorResponse(
+    "No project with this id exists for the authenticated user. Projects owned by other users and deleted projects are reported the same way. Forwarded unchanged from the project-service.",
+    errorExample(
+      404,
+      ErrorCode.NOT_FOUND,
+      ProjectServiceMessage.PROJECT_NOT_FOUND,
+    ),
+  ),
+  ProjectNameConflict: errorResponse(
+    "The user already has a project with this name. Forwarded unchanged from the project-service.",
+    errorExample(
+      409,
+      ErrorCode.CONFLICT,
+      ProjectServiceMessage.PROJECT_NAME_ALREADY_EXISTS,
     ),
   ),
   PayloadTooLarge: errorResponse(
@@ -350,6 +593,22 @@ const responses: Record<string, JsonObject> = {
   ),
 };
 
+const projectProxiedErrorResponses = {
+  "401": errorResponse(
+    "The bearer token is missing (`UNAUTHORIZED`) or is invalid, expired, revoked, not an access token, or belongs to a session that was logged out or ended (`INVALID_TOKEN`). Produced by the gateway.",
+    errorExample(401, ErrorCode.UNAUTHORIZED, ErrorMessage.UNAUTHORIZED),
+  ),
+  ...proxiedErrorResponses,
+};
+
+const projectIdParameter: JsonObject = {
+  name: "id",
+  in: "path",
+  required: true,
+  description: "Identifier of a project owned by the authenticated user.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const bearerSecurity = [{ bearerAuth: [] }];
 const refreshCookieSecurity = [{ refreshCookie: [] }];
 
@@ -371,6 +630,7 @@ const health: JsonObject = {
           gateway: "up",
           redis: "up",
           authService: "up",
+          projectService: "up",
           uptime: 1234.56,
         },
       }),
@@ -385,7 +645,8 @@ const health: JsonObject = {
         data: {
           gateway: "up",
           redis: "up",
-          authService: "down",
+          authService: "up",
+          projectService: "down",
           uptime: 1234.56,
         },
       }),
@@ -567,13 +828,163 @@ const me: JsonObject = {
   },
 };
 
+const createProject: JsonObject = {
+  tags: ["Projects"],
+  operationId: "createProject",
+  summary: "Create a project",
+  description:
+    "Protected. Proxied to the project-service `POST /projects`. The project is owned by the user the bearer token belongs to.",
+  security: bearerSecurity,
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/CreateProjectRequest" },
+      },
+    },
+  },
+  responses: {
+    "201": {
+      description: "Project created.",
+      content: jsonContent("ProjectResponse", {
+        success: true,
+        statusCode: 201,
+        message: ProjectServiceMessage.PROJECT_CREATED,
+        data: exampleProject,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "409": ref("ProjectNameConflict"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
+const listProjects: JsonObject = {
+  tags: ["Projects"],
+  operationId: "listProjects",
+  summary: "List the authenticated user's projects",
+  description:
+    "Protected. Proxied to the project-service `GET /projects`. Newest projects first. Deleted projects and projects of other users are never returned.",
+  security: bearerSecurity,
+  parameters: [
+    {
+      name: "page",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, default: 1 },
+    },
+    {
+      name: "limit",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+    },
+  ],
+  responses: {
+    "200": {
+      description: "A page of projects.",
+      content: jsonContent("ProjectListResponse", {
+        success: true,
+        statusCode: 200,
+        message: ProjectServiceMessage.PROJECTS_RETRIEVED,
+        data: {
+          items: [exampleProject],
+          pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+        },
+      }),
+    },
+    "400": ref("ValidationError"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
+const getProject: JsonObject = {
+  tags: ["Projects"],
+  operationId: "getProject",
+  summary: "Get a project",
+  description:
+    "Protected. Proxied to the project-service `GET /projects/{id}`.",
+  security: bearerSecurity,
+  parameters: [projectIdParameter],
+  responses: {
+    "200": {
+      description: "The project.",
+      content: jsonContent("ProjectResponse", {
+        success: true,
+        statusCode: 200,
+        message: ProjectServiceMessage.PROJECT_RETRIEVED,
+        data: exampleProject,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
+const updateProject: JsonObject = {
+  tags: ["Projects"],
+  operationId: "updateProject",
+  summary: "Update a project",
+  description:
+    "Protected. Proxied to the project-service `PATCH /projects/{id}`.",
+  security: bearerSecurity,
+  parameters: [projectIdParameter],
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/UpdateProjectRequest" },
+      },
+    },
+  },
+  responses: {
+    "200": {
+      description: "The updated project.",
+      content: jsonContent("ProjectResponse", {
+        success: true,
+        statusCode: 200,
+        message: ProjectServiceMessage.PROJECT_UPDATED,
+        data: { ...exampleProject, branch: "production" },
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    "409": ref("ProjectNameConflict"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
+const deleteProject: JsonObject = {
+  tags: ["Projects"],
+  operationId: "deleteProject",
+  summary: "Delete a project",
+  description:
+    "Protected. Proxied to the project-service `DELETE /projects/{id}`. Soft delete: the project disappears from every endpoint and its name becomes available again.",
+  security: bearerSecurity,
+  parameters: [projectIdParameter],
+  responses: {
+    "200": {
+      description: "Project deleted.",
+      content: jsonContent("MessageResponse", {
+        success: true,
+        statusCode: 200,
+        message: ProjectServiceMessage.PROJECT_DELETED,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
 export const openApiDocument: JsonObject = {
   openapi: "3.1.0",
   info: {
     title: "API Gateway",
     version: "1.0.0",
     description:
-      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the auth-service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth` is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
+      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service and routes under `/projects` to the project-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, is denied by default without a valid bearer token. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service relies on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
@@ -586,6 +997,11 @@ export const openApiDocument: JsonObject = {
       description:
         "Registration, sessions and the current user, proxied to the auth-service. Public routes are listed in the API description; everything else requires a bearer token.",
     },
+    {
+      name: "Projects",
+      description:
+        "Create, list, read, update and delete the authenticated user's projects, proxied to the project-service. All routes require a bearer token.",
+    },
   ],
   paths: {
     "/health": { get: health },
@@ -594,6 +1010,12 @@ export const openApiDocument: JsonObject = {
     "/auth/refresh": { post: refresh },
     "/auth/logout": { post: logout },
     "/auth/me": { get: me },
+    "/projects": { post: createProject, get: listProjects },
+    "/projects/{id}": {
+      get: getProject,
+      patch: updateProject,
+      delete: deleteProject,
+    },
   },
   components: {
     securitySchemes: {

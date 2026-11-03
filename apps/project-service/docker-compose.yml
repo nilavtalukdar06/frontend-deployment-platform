@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: project-service-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-project_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-project_password}
+      POSTGRES_DB: ${POSTGRES_DB:-project_service}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-project_user} -d ${POSTGRES_DB:-project_service}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - project-service-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: project-service-redis
+    restart: unless-stopped
+    command:
+      ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - project-service-network
+
+  project-service:
+    build:
+      context: ../..
+      dockerfile: apps/project-service/Dockerfile
+    container_name: project-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 4001
+      DATABASE_URL: ${DATABASE_URL:-postgresql://project_user:project_password@postgres:5432/project_service}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    ports:
+      - "${PROJECT_SERVICE_PORT:-4001}:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - project-service-network
+
+networks:
+  project-service-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
