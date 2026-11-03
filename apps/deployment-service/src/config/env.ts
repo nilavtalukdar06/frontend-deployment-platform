@@ -9,12 +9,9 @@ export const env = createEnv({
 
     DEPLOYMENT_ID: z.string().uuid().optional(),
     USER_ID: z.string().uuid().optional(),
+    GITHUB_TOKEN_ENCRYPTED: z.string().min(1).optional(),
 
     DATABASE_URL: z.string().url(),
-
-    AUTH_SERVICE_URL: z.string().url().default("http://localhost:4000"),
-    AUTH_SERVICE_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
-    INTERNAL_API_KEY: z.string().min(32),
 
     ENV_ENCRYPTION_KEY: z
       .string()

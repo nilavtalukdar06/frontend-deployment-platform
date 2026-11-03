@@ -2,7 +2,6 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { env } from "../config/env";
 import { DeploymentStep } from "../constants/deployment-step.enum";
-import { AuthServiceClient } from "../lib/auth-service-client";
 import { logger as rootLogger } from "../lib/logger";
 import {
   DeploymentRepository,
@@ -35,6 +34,18 @@ const loadEnvironmentVariables = async (
   }
 };
 
+const decryptGithubToken = (encryptedGithubToken: string): string => {
+  try {
+    return SecretCipher.decrypt(encryptedGithubToken);
+  } catch (err) {
+    throw new DeploymentError(
+      DeploymentStep.INITIALIZE,
+      "github access token could not be decrypted",
+      { cause: err },
+    );
+  }
+};
+
 const advance = async (
   deploymentId: string,
   status: DeploymentStatus,
@@ -58,8 +69,9 @@ const advance = async (
 export const runDeploymentPipeline = async (params: {
   deploymentId: string;
   userId: string;
+  encryptedGithubToken: string;
 }): Promise<PipelineResult> => {
-  const { deploymentId, userId } = params;
+  const { deploymentId, userId, encryptedGithubToken } = params;
   const logger = rootLogger.child({ deploymentId });
   const workspace = path.resolve(env.OUTPUT_DIR, deploymentId);
 
@@ -109,6 +121,7 @@ export const runDeploymentPipeline = async (params: {
       );
     }
 
+    const token = decryptGithubToken(encryptedGithubToken);
     const environmentVariables = await loadEnvironmentVariables(project.id);
     logger.info(
       { keys: Object.keys(environmentVariables) },
@@ -117,7 +130,6 @@ export const runDeploymentPipeline = async (params: {
 
     logger.info({ step: DeploymentStep.CLONE }, "cloning repository");
     await advance(deploymentId, "cloning", DeploymentStep.CLONE);
-    const token = await AuthServiceClient.getGithubToken(userId);
     const commitSha = await CloneService.clone({
       repositoryUrl: project.repositoryUrl,
       branch: deployment.branch,

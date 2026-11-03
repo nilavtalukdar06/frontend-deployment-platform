@@ -12,6 +12,4 @@ services:
       NODE_ENV: production
       DEPLOYMENT_ID: ${DEPLOYMENT_ID:-}
       USER_ID: ${USER_ID:-}
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:4000}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      GITHUB_TOKEN_ENCRYPTED: ${GITHUB_TOKEN_ENCRYPTED:-}

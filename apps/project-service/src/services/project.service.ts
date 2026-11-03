@@ -197,6 +197,7 @@ export abstract class ProjectService {
         await DeploymentRunnerService.start({
           deploymentId: deployment.id,
           userId,
+          githubToken: accessToken,
         });
 
         return ProjectService.toPublicProject(project);

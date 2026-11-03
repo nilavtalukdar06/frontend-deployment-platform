@@ -26,10 +26,16 @@ const abort = async (deploymentId: string, reason: string): Promise<never> => {
 };
 
 const main = async (): Promise<never> => {
-  const { DEPLOYMENT_ID: deploymentId, USER_ID: userId } = env;
+  const {
+    DEPLOYMENT_ID: deploymentId,
+    USER_ID: userId,
+    GITHUB_TOKEN_ENCRYPTED: encryptedGithubToken,
+  } = env;
 
-  if (!deploymentId || !userId) {
-    logger.fatal("DEPLOYMENT_ID and USER_ID are required");
+  if (!deploymentId || !userId || !encryptedGithubToken) {
+    logger.fatal(
+      "DEPLOYMENT_ID, USER_ID and GITHUB_TOKEN_ENCRYPTED are required",
+    );
     return exit(1);
   }
 
@@ -50,7 +56,11 @@ const main = async (): Promise<never> => {
   });
 
   try {
-    const result = await runDeploymentPipeline({ deploymentId, userId });
+    const result = await runDeploymentPipeline({
+      deploymentId,
+      userId,
+      encryptedGithubToken,
+    });
     logger.info({ deploymentId, result }, "deployment pipeline finished");
     return exit(0);
   } catch {

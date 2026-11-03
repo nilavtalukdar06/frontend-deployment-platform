@@ -3,6 +3,7 @@ import { env } from "../config/env";
 import { ecs } from "../lib/ecs";
 import { logger } from "../lib/logger";
 import { DeploymentRepository } from "../repositories/deployment.repository";
+import { SecretCipher } from "../utils/secret-cipher";
 
 const LAUNCH_FAILURE_MESSAGE =
   "[initialize] the deployment task could not be started";
@@ -10,12 +11,14 @@ const LAUNCH_FAILURE_MESSAGE =
 export interface StartDeploymentInput {
   deploymentId: string;
   userId: string;
+  githubToken: string;
 }
 
 export abstract class DeploymentRunnerService {
   static async start({
     deploymentId,
     userId,
+    githubToken,
   }: StartDeploymentInput): Promise<void> {
     try {
       const { tasks, failures } = await ecs.send(
@@ -43,6 +46,10 @@ export abstract class DeploymentRunnerService {
                 environment: [
                   { name: "DEPLOYMENT_ID", value: deploymentId },
                   { name: "USER_ID", value: userId },
+                  {
+                    name: "GITHUB_TOKEN_ENCRYPTED",
+                    value: SecretCipher.encrypt(githubToken),
+                  },
                 ],
               },
             ],
