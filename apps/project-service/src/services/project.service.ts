@@ -1,6 +1,7 @@
 import { randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import type { Project } from "../db/schema";
+import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import { SLUG_ADJECTIVES, SLUG_NOUNS } from "../constants/slug-words";
 import { ErrorMessage } from "../constants/response-message.enum";
@@ -19,6 +20,7 @@ import { GithubService, type GithubRepository } from "./github.service";
 export interface PublicProject {
   id: string;
   slug: string;
+  url: string;
   githubRepositoryId: number;
   private: boolean;
   name: string;
@@ -81,12 +83,17 @@ const REPOSITORY_UNIQUE_INDEX =
 const DETECTION_CONCURRENCY = 6;
 const MAX_SLUG_ATTEMPTS = 10;
 const DEFAULT_ROOT_DIRECTORY = ".";
+const SITES_BASE_URL = new URL(env.SITES_BASE_URL);
+
+const siteUrlFor = (slug: string): string =>
+  `${SITES_BASE_URL.protocol}//${slug}.${SITES_BASE_URL.host}`;
 
 export abstract class ProjectService {
   static toPublicProject(project: Project): PublicProject {
     return {
       id: project.id,
       slug: project.slug,
+      url: siteUrlFor(project.slug),
       githubRepositoryId: project.githubRepositoryId,
       private: project.private,
       name: project.name,

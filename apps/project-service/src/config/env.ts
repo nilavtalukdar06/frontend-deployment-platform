@@ -39,6 +39,14 @@ export const env = createEnv({
     ECS_SECURITY_GROUP_IDS: commaSeparatedList.default([]),
     ECS_ASSIGN_PUBLIC_IP: z.enum(["ENABLED", "DISABLED"]).default("ENABLED"),
 
+    SITES_BASE_URL: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).pathname === "/", {
+        message: "must be an origin without a path",
+      })
+      .default("http://localhost:8080"),
+
     GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
 
     CORS_ORIGIN: z.string().default("*"),

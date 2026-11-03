@@ -111,6 +111,7 @@ const exampleTokenPayload = {
 const exampleProject = {
   id: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
   slug: "brave-falcon",
+  url: "http://brave-falcon.localhost:8080",
   githubRepositoryId: 715409281,
   private: false,
   name: "marketing-site",
@@ -393,6 +394,7 @@ const schemas: Record<string, JsonObject> = {
     required: [
       "id",
       "slug",
+      "url",
       "githubRepositoryId",
       "private",
       "name",
@@ -415,6 +417,13 @@ const schemas: Record<string, JsonObject> = {
         description:
           "Globally unique identifier made of exactly two lowercase words separated by a hyphen, such as `brave-falcon`. Generated randomly when the project is created (not derived from the repository name), never changes, and is not released when the project is deleted.",
         example: "brave-falcon",
+      },
+      url: {
+        type: "string",
+        format: "uri",
+        description:
+          "Public URL of the deployed site, `<protocol>//<slug>.<host>` built from the project-service `SITES_BASE_URL` setting, for example `https://brave-falcon.example.app`. Served by the proxy-service, which always serves the project's latest `ready` deployment, so the URL responds with 404 until the first deployment is ready.",
+        example: "http://brave-falcon.localhost:8080",
       },
       githubRepositoryId: {
         type: "integer",
