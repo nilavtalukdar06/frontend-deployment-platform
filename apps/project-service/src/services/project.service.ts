@@ -13,6 +13,7 @@ import { FrameworkService } from "./framework.service";
 import { AuthServiceClient } from "../lib/auth-service-client";
 import { mapWithConcurrency } from "../utils/map-with-concurrency";
 import { SecretCipher } from "../utils/secret-cipher";
+import { DeploymentRunnerService } from "./deployment-runner.service";
 import { GithubService, type GithubRepository } from "./github.service";
 
 export interface PublicProject {
@@ -175,7 +176,7 @@ export abstract class ProjectService {
       const slug = ProjectService.generateSlug();
 
       try {
-        const project = await ProjectRepository.create(
+        const { project, deployment } = await ProjectRepository.create(
           {
             userId,
             slug,
@@ -192,6 +193,11 @@ export abstract class ProjectService {
           },
           encryptedEnvironmentVariables,
         );
+
+        await DeploymentRunnerService.start({
+          deploymentId: deployment.id,
+          userId,
+        });
 
         return ProjectService.toPublicProject(project);
       } catch (err) {

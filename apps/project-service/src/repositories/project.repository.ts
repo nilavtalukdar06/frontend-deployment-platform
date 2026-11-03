@@ -4,6 +4,7 @@ import {
   deployments,
   projectEnvironmentVariables,
   projects,
+  type Deployment,
   type NewProject,
   type Project,
 } from "../db/schema";
@@ -29,6 +30,11 @@ export interface EncryptedEnvironmentVariable {
   value: string;
 }
 
+export interface CreatedProject {
+  project: Project;
+  deployment: Deployment;
+}
+
 export interface ProjectPage {
   items: Project[];
   total: number;
@@ -38,7 +44,7 @@ export abstract class ProjectRepository {
   static async create(
     data: Omit<NewProject, "id" | "createdAt" | "updatedAt" | "deletedAt">,
     environmentVariables: EncryptedEnvironmentVariable[] = [],
-  ): Promise<Project> {
+  ): Promise<CreatedProject> {
     return db.transaction(async (tx) => {
       const [project] = await tx.insert(projects).values(data).returning();
 
@@ -46,15 +52,22 @@ export abstract class ProjectRepository {
         throw new Error("project insert returned no rows");
       }
 
-      await tx.insert(deployments).values({
-        projectId: project.id,
-        branch: project.branch,
-        framework: project.framework,
-        rootDirectory: project.rootDirectory,
-        installCommand: project.installCommand,
-        buildCommand: project.buildCommand,
-        outputDirectory: project.outputDirectory,
-      });
+      const [deployment] = await tx
+        .insert(deployments)
+        .values({
+          projectId: project.id,
+          branch: project.branch,
+          framework: project.framework,
+          rootDirectory: project.rootDirectory,
+          installCommand: project.installCommand,
+          buildCommand: project.buildCommand,
+          outputDirectory: project.outputDirectory,
+        })
+        .returning();
+
+      if (!deployment) {
+        throw new Error("deployment insert returned no rows");
+      }
 
       if (environmentVariables.length > 0) {
         await tx.insert(projectEnvironmentVariables).values(
@@ -66,7 +79,7 @@ export abstract class ProjectRepository {
         );
       }
 
-      return project;
+      return { project, deployment };
     });
   }
 

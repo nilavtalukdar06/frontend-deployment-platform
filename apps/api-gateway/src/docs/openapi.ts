@@ -1041,7 +1041,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Protected. Proxied to the project-service `POST /projects`. Imports a repository picked from `GET /projects/repositories` for the user the bearer token belongs to. Using the user's GitHub token, the project-service looks the repository up by id, requires push access, requires its default branch to be a Vite project (detected from the repository files, no clone), and stores the project, its encrypted environment variables and its first `queued` deployment with a unique two-word slug. Environment variables are not part of the response; read them with `GET /projects/{id}/environment-variables`.",
+    "Protected. Proxied to the project-service `POST /projects`. Imports a repository picked from `GET /projects/repositories` for the user the bearer token belongs to. Using the user's GitHub token, the project-service looks the repository up by id, requires push access, requires its default branch to be a Vite project (detected from the repository files, no clone), and stores the project, its encrypted environment variables and its first `queued` deployment with a unique two-word slug, then starts an AWS ECS task that runs the deployment pipeline for that deployment. If the task cannot be started the deployment is marked `failed` and the project is still returned. Environment variables are not part of the response; read them with `GET /projects/{id}/environment-variables`.",
   security: bearerSecurity,
   requestBody: {
     required: true,
