@@ -12,6 +12,7 @@ const sandboxedEnv = (): NodeJS.ProcessEnv => ({
   HOME: process.env["HOME"],
   CI: "true",
   COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+  COREPACK_ENABLE_STRICT: "0",
 });
 
 export abstract class BuildService {

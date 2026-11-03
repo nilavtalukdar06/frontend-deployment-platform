@@ -8,7 +8,12 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { projectFramework, projects } from "./projects.table";
+import {
+  packageManager,
+  projectFramework,
+  projects,
+  runtime,
+} from "./projects.table";
 
 export const deploymentStatuses = [
   "queued",
@@ -37,6 +42,8 @@ export const deployments = pgTable(
     commitSha: text(),
     framework: projectFramework().notNull(),
     rootDirectory: text().notNull(),
+    packageManager: packageManager().notNull(),
+    runtime: runtime().notNull(),
     installCommand: text().notNull(),
     buildCommand: text().notNull(),
     outputDirectory: text().notNull(),

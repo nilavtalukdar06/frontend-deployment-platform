@@ -3,6 +3,17 @@ import { StatusCodes } from "http-status-codes";
 import type { Deployment, Project } from "../db/schema";
 import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
+import {
+  commandUsesPackageManager,
+  type PackageManager,
+  PACKAGE_MANAGER_PRESETS,
+} from "../constants/package-manager";
+import {
+  commandUsesRuntime,
+  defaultBuildCommand,
+  defaultRuntimeFor,
+  type Runtime,
+} from "../constants/runtime";
 import { SLUG_ADJECTIVES, SLUG_NOUNS } from "../constants/slug-words";
 import { ErrorMessage } from "../constants/response-message.enum";
 import {
@@ -30,6 +41,8 @@ export interface PublicProject {
   branch: string;
   framework: Project["framework"];
   rootDirectory: string;
+  packageManager: Project["packageManager"];
+  runtime: Project["runtime"];
   installCommand: string;
   buildCommand: string;
   outputDirectory: string;
@@ -45,6 +58,8 @@ export interface PublicDeployment {
   commitSha: string | null;
   framework: Project["framework"];
   rootDirectory: string;
+  packageManager: Project["packageManager"];
+  runtime: Project["runtime"];
   installCommand: string;
   buildCommand: string;
   outputDirectory: string;
@@ -62,6 +77,8 @@ export interface EnvironmentVariableInput {
 
 export interface CreateProjectInput {
   repositoryId: number;
+  packageManager: PackageManager;
+  runtime?: Runtime;
   installCommand?: string;
   buildCommand?: string;
   environmentVariables?: EnvironmentVariableInput[];
@@ -131,6 +148,8 @@ export abstract class ProjectService {
       branch: project.branch,
       framework: project.framework,
       rootDirectory: project.rootDirectory,
+      packageManager: project.packageManager,
+      runtime: project.runtime,
       installCommand: project.installCommand,
       buildCommand: project.buildCommand,
       outputDirectory: project.outputDirectory,
@@ -148,6 +167,8 @@ export abstract class ProjectService {
       commitSha: deployment.commitSha,
       framework: deployment.framework,
       rootDirectory: deployment.rootDirectory,
+      packageManager: deployment.packageManager,
+      runtime: deployment.runtime,
       installCommand: deployment.installCommand,
       buildCommand: deployment.buildCommand,
       outputDirectory: deployment.outputDirectory,
@@ -204,11 +225,18 @@ export abstract class ProjectService {
     userId: string,
     {
       repositoryId,
+      packageManager,
+      runtime,
       installCommand,
       buildCommand,
       environmentVariables = [],
     }: CreateProjectInput,
   ): Promise<PublicProject> {
+    const resolvedRuntime = runtime ?? defaultRuntimeFor(packageManager);
+    const resolvedInstallCommand =
+      installCommand ?? PACKAGE_MANAGER_PRESETS[packageManager].install;
+    const resolvedBuildCommand =
+      buildCommand ?? defaultBuildCommand(packageManager, resolvedRuntime);
     const accessToken = await AuthServiceClient.getGithubToken(userId);
     const repository = await ProjectService.requireRepository(
       accessToken,
@@ -244,8 +272,10 @@ export abstract class ProjectService {
             branch: repository.defaultBranch,
             framework: "vite",
             rootDirectory: DEFAULT_ROOT_DIRECTORY,
-            installCommand,
-            buildCommand,
+            packageManager,
+            runtime: resolvedRuntime,
+            installCommand: resolvedInstallCommand,
+            buildCommand: resolvedBuildCommand,
           },
           encryptedEnvironmentVariables,
         );
@@ -307,13 +337,25 @@ export abstract class ProjectService {
     id: string,
     changes: ProjectChanges,
   ): Promise<PublicProject> {
-    if (changes.branch !== undefined || changes.rootDirectory !== undefined) {
-      const current = await ProjectRepository.findById(id, userId);
+    const touchesLocation =
+      changes.branch !== undefined || changes.rootDirectory !== undefined;
+    const touchesBuild =
+      changes.packageManager !== undefined ||
+      changes.runtime !== undefined ||
+      changes.installCommand !== undefined ||
+      changes.buildCommand !== undefined;
+
+    let current: Project | undefined;
+
+    if (touchesLocation || touchesBuild) {
+      current = await ProjectRepository.findById(id, userId);
 
       if (!current) {
         throw ProjectService.projectNotFound();
       }
+    }
 
+    if (touchesLocation && current) {
       const accessToken = await AuthServiceClient.getGithubToken(userId);
       const repository = await ProjectService.requireRepository(
         accessToken,
@@ -330,8 +372,12 @@ export abstract class ProjectService {
       );
     }
 
+    const nextChanges = current
+      ? ProjectService.resolveBuildSettingsChanges(changes, current)
+      : changes;
+
     try {
-      const project = await ProjectRepository.update(id, userId, changes);
+      const project = await ProjectRepository.update(id, userId, nextChanges);
 
       if (!project) {
         throw ProjectService.projectNotFound();
@@ -461,6 +507,65 @@ export abstract class ProjectService {
       StatusCodes.NOT_FOUND,
       ErrorMessage.DEPLOYMENT_NOT_FOUND,
       ErrorCode.NOT_FOUND,
+    );
+  }
+
+  /**
+   * Enforces a project's build settings on update: the install command must run
+   * with its package manager and the build command must run on its runtime.
+   * Rejects a command that does not, and resets a command to the appropriate
+   * default when the caller switches package manager or runtime without
+   * supplying a replacement command.
+   */
+  private static resolveBuildSettingsChanges(
+    changes: ProjectChanges,
+    current: Project,
+  ): ProjectChanges {
+    const next: ProjectChanges = { ...changes };
+    const packageManager = changes.packageManager ?? current.packageManager;
+    const runtime = changes.runtime ?? current.runtime;
+    const switchingPackageManager =
+      changes.packageManager !== undefined &&
+      changes.packageManager !== current.packageManager;
+    const switchingRuntime =
+      changes.runtime !== undefined && changes.runtime !== current.runtime;
+
+    if (changes.installCommand !== undefined) {
+      if (!commandUsesPackageManager(changes.installCommand, packageManager)) {
+        throw ProjectService.packageManagerCommandMismatch(packageManager);
+      }
+    } else if (switchingPackageManager) {
+      next.installCommand = PACKAGE_MANAGER_PRESETS[packageManager].install;
+    }
+
+    if (changes.buildCommand !== undefined) {
+      if (!commandUsesRuntime(changes.buildCommand, runtime)) {
+        throw ProjectService.runtimeCommandMismatch(runtime);
+      }
+    } else if (switchingPackageManager || switchingRuntime) {
+      next.buildCommand = defaultBuildCommand(packageManager, runtime);
+    }
+
+    return next;
+  }
+
+  private static packageManagerCommandMismatch(
+    packageManager: PackageManager,
+  ): ApiError {
+    return new ApiError(
+      StatusCodes.UNPROCESSABLE_ENTITY,
+      ErrorMessage.PACKAGE_MANAGER_COMMAND_MISMATCH,
+      ErrorCode.PACKAGE_MANAGER_COMMAND_MISMATCH,
+      { packageManager },
+    );
+  }
+
+  private static runtimeCommandMismatch(runtime: Runtime): ApiError {
+    return new ApiError(
+      StatusCodes.UNPROCESSABLE_ENTITY,
+      ErrorMessage.RUNTIME_COMMAND_MISMATCH,
+      ErrorCode.RUNTIME_COMMAND_MISMATCH,
+      { runtime },
     );
   }
 

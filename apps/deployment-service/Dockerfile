@@ -17,7 +17,8 @@ RUN pnpm --filter deployment-service deploy --prod --legacy /prod/deployment-ser
 FROM ubuntu:24.04 AS runner
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git tini \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl git tini unzip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -27,6 +28,15 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
     && corepack enable \
     && node --version && npm --version && git --version
+
+# Install bun so projects can build with the bun package manager / runtime.
+# pnpm and yarn are provided on demand by corepack (enabled above); bun ships
+# as a standalone binary and must be installed explicitly. BUN_INSTALL places
+# the binary at /usr/local/bin/bun, which is already on PATH.
+ENV BUN_INSTALL=/usr/local
+ARG BUN_VERSION=1.4.4
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" \
+    && bun --version
 
 ENV NODE_ENV=production
 WORKDIR /app

@@ -4,6 +4,8 @@ import {
   SuccessMessage,
 } from "../constants/response-message.enum";
 import { deploymentStatuses, projectFrameworks } from "../db/schema";
+import { packageManagers } from "../constants/package-manager";
+import { runtimes } from "../constants/runtime";
 import {
   MAX_ENVIRONMENT_VARIABLES,
   MAX_ENVIRONMENT_VARIABLE_KEY_LENGTH,
@@ -60,6 +62,8 @@ const exampleProject = {
   branch: "main",
   framework: "vite",
   rootDirectory: ".",
+  packageManager: "npm",
+  runtime: "node",
   installCommand: "npm install",
   buildCommand: "npm run build",
   outputDirectory: "dist",
@@ -75,6 +79,8 @@ const exampleDeployment = {
   commitSha: null,
   framework: "vite",
   rootDirectory: ".",
+  packageManager: "npm",
+  runtime: "node",
   installCommand: "npm install",
   buildCommand: "npm run build",
   outputDirectory: "dist",
@@ -203,18 +209,34 @@ const projectProperties: Record<string, JsonObject> = {
     ),
     example: ".",
   },
+  packageManager: {
+    type: "string",
+    enum: [...packageManagers],
+    description:
+      "Package manager used to install dependencies. Defaults to `npm`. The `installCommand` must be run with this package manager.",
+    example: "npm",
+  },
+  runtime: {
+    type: "string",
+    enum: [...runtimes],
+    description:
+      "Runtime that executes the build. Defaults to `bun` when `packageManager` is `bun`, otherwise `node`. The `buildCommand` must run on this runtime: `node` runs the build through a Node-based package manager (`npm`/`npx`/`pnpm`/`pnpx`/`yarn`/`node`), `bun` runs it with `bun`/`bunx`.",
+    example: "node",
+  },
   installCommand: {
     type: "string",
     minLength: 1,
     maxLength: 500,
-    description: "Defaults to `npm install`.",
+    description:
+      "Must invoke the project's `packageManager`. Defaults to that package manager's install command (e.g. `npm install`, `pnpm install`, `yarn install`, `bun install`).",
     example: "npm install",
   },
   buildCommand: {
     type: "string",
     minLength: 1,
     maxLength: 500,
-    description: "Defaults to `npm run build`.",
+    description:
+      "Must run on the project's `runtime`. Defaults to `bun run build` on the bun runtime, otherwise the package manager's build command (e.g. `npm run build`, `pnpm run build`, `yarn build`).",
     example: "npm run build",
   },
   outputDirectory: {
@@ -232,12 +254,24 @@ const schemas: Record<string, JsonObject> = {
     description:
       "Only `vite` is supported: every project is verified to be a Vite project when it is created and whenever its `branch` or `rootDirectory` changes.",
   },
+  PackageManager: {
+    type: "string",
+    enum: [...packageManagers],
+    description:
+      "Supported package managers, used for the install command. `npm` is always available; `pnpm` and `yarn` are provided by corepack; `bun` is installed in the build image.",
+  },
+  Runtime: {
+    type: "string",
+    enum: [...runtimes],
+    description:
+      "Runtime that executes the build command, independent of the package manager. Both `node` and `bun` are available in the build image, so e.g. dependencies can be installed with pnpm or yarn and the build run on either runtime.",
+  },
   CreateProjectRequest: {
     type: "object",
     additionalProperties: false,
     required: ["repositoryId"],
     description:
-      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub. `installCommand` and `buildCommand` fall back to their defaults when omitted; the remaining settings start with defaults. Everything except the repository can be changed later with `PATCH`.",
+      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub. `packageManager` defaults to `npm` and `runtime` defaults to `bun` for a bun project and `node` otherwise; `installCommand` falls back to the package manager's default and `buildCommand` to the runtime's default when omitted. A supplied `installCommand` must invoke the package manager and a supplied `buildCommand` must run on the runtime. The remaining settings start with defaults. Everything except the repository can be changed later with `PATCH`.",
     properties: {
       repositoryId: {
         type: "integer",
@@ -246,6 +280,8 @@ const schemas: Record<string, JsonObject> = {
           "GitHub numeric repository id (`id` from `GET /projects/repositories`). The repository must be accessible with the user's GitHub token, the user must have push access, it must not be archived or disabled, and its default branch must be a Vite project.",
         example: 715409281,
       },
+      packageManager: projectProperties["packageManager"],
+      runtime: projectProperties["runtime"],
       installCommand: projectProperties["installCommand"],
       buildCommand: projectProperties["buildCommand"],
       environmentVariables: {
@@ -291,7 +327,7 @@ const schemas: Record<string, JsonObject> = {
     additionalProperties: false,
     minProperties: 1,
     description:
-      "Partial update. At least one field is required; fields that are omitted stay unchanged. The repository, slug and framework cannot be changed. Changing `branch` or `rootDirectory` re-checks the new location with the GitHub API and requires it to still be a Vite project.",
+      "Partial update. At least one field is required; fields that are omitted stay unchanged. The repository, slug and framework cannot be changed. Changing `branch` or `rootDirectory` re-checks the new location with the GitHub API and requires it to still be a Vite project. `installCommand` must invoke the project's `packageManager` and `buildCommand` must run on its `runtime` (the ones being set in this request, otherwise the current ones). Switching `packageManager` without supplying an `installCommand` resets it to the new package manager's default; switching `packageManager` or `runtime` without supplying a `buildCommand` resets it to the runtime's default.",
     properties: {
       name: projectProperties["name"],
       description: {
@@ -302,6 +338,8 @@ const schemas: Record<string, JsonObject> = {
       },
       branch: projectProperties["branch"],
       rootDirectory: projectProperties["rootDirectory"],
+      packageManager: projectProperties["packageManager"],
+      runtime: projectProperties["runtime"],
       installCommand: projectProperties["installCommand"],
       buildCommand: projectProperties["buildCommand"],
       outputDirectory: projectProperties["outputDirectory"],
@@ -321,6 +359,8 @@ const schemas: Record<string, JsonObject> = {
       "branch",
       "framework",
       "rootDirectory",
+      "packageManager",
+      "runtime",
       "installCommand",
       "buildCommand",
       "outputDirectory",
@@ -358,6 +398,8 @@ const schemas: Record<string, JsonObject> = {
       branch: { type: "string" },
       framework: { $ref: "#/components/schemas/ProjectFramework" },
       rootDirectory: { type: "string" },
+      packageManager: { $ref: "#/components/schemas/PackageManager" },
+      runtime: { $ref: "#/components/schemas/Runtime" },
       installCommand: { type: "string" },
       buildCommand: { type: "string" },
       outputDirectory: { type: "string" },
@@ -381,6 +423,8 @@ const schemas: Record<string, JsonObject> = {
       "commitSha",
       "framework",
       "rootDirectory",
+      "packageManager",
+      "runtime",
       "installCommand",
       "buildCommand",
       "outputDirectory",
@@ -407,6 +451,8 @@ const schemas: Record<string, JsonObject> = {
       },
       framework: { $ref: "#/components/schemas/ProjectFramework" },
       rootDirectory: { type: "string" },
+      packageManager: { $ref: "#/components/schemas/PackageManager" },
+      runtime: { $ref: "#/components/schemas/Runtime" },
       installCommand: { type: "string" },
       buildCommand: { type: "string" },
       outputDirectory: { type: "string" },
@@ -733,6 +779,24 @@ const responses: Record<string, JsonObject> = {
               { detectedFramework: "nextjs" },
             ),
           },
+          packageManagerCommandMismatch: {
+            summary: "Install command does not use the project's package manager",
+            value: errorExample(
+              422,
+              ErrorCode.PACKAGE_MANAGER_COMMAND_MISMATCH,
+              ErrorMessage.PACKAGE_MANAGER_COMMAND_MISMATCH,
+              { packageManager: "pnpm" },
+            ),
+          },
+          runtimeCommandMismatch: {
+            summary: "Build command does not run on the project's runtime",
+            value: errorExample(
+              422,
+              ErrorCode.RUNTIME_COMMAND_MISMATCH,
+              ErrorMessage.RUNTIME_COMMAND_MISMATCH,
+              { runtime: "bun" },
+            ),
+          },
         },
       },
     },
@@ -1030,7 +1094,7 @@ const createDeployment: JsonObject = {
   operationId: "createDeployment",
   summary: "Redeploy a project",
   description:
-    "Starts a fresh deployment of an existing project without changing it, the equivalent of Vercel's \"Redeploy\". The project's current build settings (`branch`, `framework`, `rootDirectory`, `installCommand`, `buildCommand`, `outputDirectory`) and its current environment variables are used, so this is how you ship an updated commit or pick up changed environment variables. A new `queued` deployment is created and an AWS ECS (Fargate) task running the deployment pipeline is launched for it exactly as on project creation, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` passed as container environment variables; if the task cannot be started the deployment is marked `failed` with a `[initialize]` error message. The repository is not re-validated up front: if access was revoked or the branch no longer exists the deployment fails in its `cloning` step. Only one deployment can be in a non-terminal status per project, so a `409` is returned while a previous deployment is still running. The new deployment is returned with status `queued`; the response is `202 Accepted` because the build runs asynchronously.",
+    "Starts a fresh deployment of an existing project without changing it, the equivalent of Vercel's \"Redeploy\". The project's current build settings (`branch`, `framework`, `rootDirectory`, `packageManager`, `runtime`, `installCommand`, `buildCommand`, `outputDirectory`) and its current environment variables are used, so this is how you ship an updated commit or pick up changed environment variables. A new `queued` deployment is created and an AWS ECS (Fargate) task running the deployment pipeline is launched for it exactly as on project creation, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` passed as container environment variables; if the task cannot be started the deployment is marked `failed` with a `[initialize]` error message. The repository is not re-validated up front: if access was revoked or the branch no longer exists the deployment fails in its `cloning` step. Only one deployment can be in a non-terminal status per project, so a `409` is returned while a previous deployment is still running. The new deployment is returned with status `queued`; the response is `202 Accepted` because the build runs asynchronously.",
   security: userIdSecurity,
   parameters: [projectIdParameter],
   responses: {

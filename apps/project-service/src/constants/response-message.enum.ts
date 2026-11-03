@@ -34,6 +34,8 @@ export enum ErrorMessage {
   GITHUB_AUTH_REQUIRED = "GitHub authorization is missing or was revoked, please sign in with GitHub again",
   SOURCE_NOT_FOUND = "The branch or root directory was not found in the repository",
   UNSUPPORTED_FRAMEWORK = "Only Vite projects are supported",
+  PACKAGE_MANAGER_COMMAND_MISMATCH = "The install command must be run with the project's package manager",
+  RUNTIME_COMMAND_MISMATCH = "The build command must run on the project's runtime",
   GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
   ENVIRONMENT_VARIABLE_NOT_FOUND = "The requested environment variable could not be found",

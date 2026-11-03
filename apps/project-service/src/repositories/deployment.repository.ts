@@ -44,6 +44,8 @@ export abstract class DeploymentRepository {
           branch: project.branch,
           framework: project.framework,
           rootDirectory: project.rootDirectory,
+          packageManager: project.packageManager,
+          runtime: project.runtime,
           installCommand: project.installCommand,
           buildCommand: project.buildCommand,
           outputDirectory: project.outputDirectory,

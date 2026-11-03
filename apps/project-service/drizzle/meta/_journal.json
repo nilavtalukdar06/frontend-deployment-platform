@@ -78,6 +78,20 @@
       "when": 1793717918157,
       "tag": "0010_project_environment_variables_updated_at_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793728998280,
+      "tag": "0011_add_package_manager",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793729696718,
+      "tag": "0012_add_runtime",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,14 @@ export const projectFrameworks = ["vite"] as const;
 
 export const projectFramework = pgEnum("project_framework", projectFrameworks);
 
+export const packageManagers = ["npm", "pnpm", "yarn", "bun"] as const;
+
+export const packageManager = pgEnum("package_manager", packageManagers);
+
+export const runtimes = ["node", "bun"] as const;
+
+export const runtime = pgEnum("runtime", runtimes);
+
 export const projects = pgTable(
   "projects",
   {
@@ -32,6 +40,8 @@ export const projects = pgTable(
     branch: text().notNull().default("main"),
     framework: projectFramework().notNull().default("vite"),
     rootDirectory: text().notNull().default("."),
+    packageManager: packageManager().notNull().default("npm"),
+    runtime: runtime().notNull().default("node"),
     installCommand: text().notNull().default("npm install"),
     buildCommand: text().notNull().default("npm run build"),
     outputDirectory: text().notNull().default("dist"),
