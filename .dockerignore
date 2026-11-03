@@ -4,3 +4,4 @@
 **/.git
 **/*.log
 **/.env
+!apps/deployment-service/.env

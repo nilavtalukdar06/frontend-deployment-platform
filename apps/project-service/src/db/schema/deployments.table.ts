@@ -12,7 +12,10 @@ import { projectFramework, projects } from "./projects.table";
 
 export const deploymentStatuses = [
   "queued",
+  "cloning",
+  "installing",
   "building",
+  "uploading",
   "ready",
   "failed",
   "canceled",
