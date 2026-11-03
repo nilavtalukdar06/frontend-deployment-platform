@@ -40,6 +40,26 @@ projectRouter.delete(
   validate(ProjectValidator.remove),
   asyncHandler(ProjectController.remove),
 );
+projectRouter.post(
+  "/:id/deployments",
+  validate(ProjectValidator.redeploy),
+  asyncHandler(ProjectController.redeploy),
+);
+projectRouter.get(
+  "/:id/deployments",
+  validate(ProjectValidator.listDeployments),
+  asyncHandler(ProjectController.listDeployments),
+);
+projectRouter.get(
+  "/:id/deployments/:deploymentId",
+  validate(ProjectValidator.getDeployment),
+  asyncHandler(ProjectController.getDeployment),
+);
+projectRouter.post(
+  "/:id/deployments/:deploymentId/cancel",
+  validate(ProjectValidator.cancelDeployment),
+  asyncHandler(ProjectController.cancelDeployment),
+);
 projectRouter.get(
   "/:id/environment-variables",
   validate(ProjectValidator.listEnvironmentVariables),

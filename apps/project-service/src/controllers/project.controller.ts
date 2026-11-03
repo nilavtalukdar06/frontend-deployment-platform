@@ -113,6 +113,86 @@ export abstract class ProjectController {
       .json(new ApiResponse(StatusCodes.OK, SuccessMessage.PROJECT_DELETED));
   }
 
+  static async redeploy(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const deployment = await ProjectService.redeploy(
+      userId,
+      req.params["id"] ?? "",
+    );
+
+    res
+      .status(StatusCodes.ACCEPTED)
+      .json(
+        new ApiResponse(
+          StatusCodes.ACCEPTED,
+          SuccessMessage.DEPLOYMENT_STARTED,
+          deployment,
+        ),
+      );
+  }
+
+  static async listDeployments(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const { page, limit } = req.query as unknown as {
+      page: number;
+      limit: number;
+    };
+    const deployments = await ProjectService.listDeployments(
+      userId,
+      req.params["id"] ?? "",
+      page,
+      limit,
+    );
+
+    res
+      .status(StatusCodes.OK)
+      .json(
+        new ApiResponse(
+          StatusCodes.OK,
+          SuccessMessage.DEPLOYMENTS_RETRIEVED,
+          deployments,
+        ),
+      );
+  }
+
+  static async getDeployment(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const deployment = await ProjectService.getDeployment(
+      userId,
+      req.params["id"] ?? "",
+      req.params["deploymentId"] ?? "",
+    );
+
+    res
+      .status(StatusCodes.OK)
+      .json(
+        new ApiResponse(
+          StatusCodes.OK,
+          SuccessMessage.DEPLOYMENT_RETRIEVED,
+          deployment,
+        ),
+      );
+  }
+
+  static async cancelDeployment(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const deployment = await ProjectService.cancelDeployment(
+      userId,
+      req.params["id"] ?? "",
+      req.params["deploymentId"] ?? "",
+    );
+
+    res
+      .status(StatusCodes.OK)
+      .json(
+        new ApiResponse(
+          StatusCodes.OK,
+          SuccessMessage.DEPLOYMENT_CANCELED,
+          deployment,
+        ),
+      );
+  }
+
   private static requireUserId(req: Request): string {
     if (!req.user) {
       throw new ApiError(

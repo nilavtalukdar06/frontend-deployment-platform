@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
-import type { Project } from "../db/schema";
+import type { Deployment, Project } from "../db/schema";
 import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import { SLUG_ADJECTIVES, SLUG_NOUNS } from "../constants/slug-words";
@@ -9,6 +9,7 @@ import {
   ProjectRepository,
   type ProjectChanges,
 } from "../repositories/project.repository";
+import { DeploymentRepository } from "../repositories/deployment.repository";
 import { ApiError } from "../utils/api-error";
 import { FrameworkService } from "./framework.service";
 import { AuthServiceClient } from "../lib/auth-service-client";
@@ -32,6 +33,24 @@ export interface PublicProject {
   installCommand: string;
   buildCommand: string;
   outputDirectory: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface PublicDeployment {
+  id: string;
+  projectId: string;
+  status: Deployment["status"];
+  branch: string;
+  commitSha: string | null;
+  framework: Project["framework"];
+  rootDirectory: string;
+  installCommand: string;
+  buildCommand: string;
+  outputDirectory: string;
+  errorMessage: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -76,6 +95,16 @@ export interface ProjectList {
   };
 }
 
+export interface DeploymentList {
+  items: PublicDeployment[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const SLUG_UNIQUE_INDEX = "projects_slug_unique_idx";
 const REPOSITORY_UNIQUE_INDEX =
@@ -107,6 +136,26 @@ export abstract class ProjectService {
       outputDirectory: project.outputDirectory,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
+    };
+  }
+
+  static toPublicDeployment(deployment: Deployment): PublicDeployment {
+    return {
+      id: deployment.id,
+      projectId: deployment.projectId,
+      status: deployment.status,
+      branch: deployment.branch,
+      commitSha: deployment.commitSha,
+      framework: deployment.framework,
+      rootDirectory: deployment.rootDirectory,
+      installCommand: deployment.installCommand,
+      buildCommand: deployment.buildCommand,
+      outputDirectory: deployment.outputDirectory,
+      errorMessage: deployment.errorMessage,
+      startedAt: deployment.startedAt,
+      finishedAt: deployment.finishedAt,
+      createdAt: deployment.createdAt,
+      updatedAt: deployment.updatedAt,
     };
   }
 
@@ -302,12 +351,130 @@ export abstract class ProjectService {
     }
   }
 
+  static async redeploy(userId: string, id: string): Promise<PublicDeployment> {
+    const project = await ProjectRepository.findById(id, userId);
+
+    if (!project) {
+      throw ProjectService.projectNotFound();
+    }
+
+    const accessToken = await AuthServiceClient.getGithubToken(userId);
+    const deployment = await DeploymentRepository.createForProject(project);
+
+    if (!deployment) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        ErrorMessage.DEPLOYMENT_IN_PROGRESS,
+        ErrorCode.DEPLOYMENT_IN_PROGRESS,
+      );
+    }
+
+    await DeploymentRunnerService.start({
+      deploymentId: deployment.id,
+      userId,
+      githubToken: accessToken,
+    });
+
+    return ProjectService.toPublicDeployment(deployment);
+  }
+
+  static async listDeployments(
+    userId: string,
+    id: string,
+    page: number,
+    limit: number,
+  ): Promise<DeploymentList> {
+    await ProjectService.requireOwnedProject(userId, id);
+
+    const { items, total } = await DeploymentRepository.listByProject(
+      id,
+      limit,
+      (page - 1) * limit,
+    );
+
+    return {
+      items: items.map(ProjectService.toPublicDeployment),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  static async getDeployment(
+    userId: string,
+    id: string,
+    deploymentId: string,
+  ): Promise<PublicDeployment> {
+    await ProjectService.requireOwnedProject(userId, id);
+
+    const deployment = await DeploymentRepository.findByIdForProject(
+      deploymentId,
+      id,
+    );
+
+    if (!deployment) {
+      throw ProjectService.deploymentNotFound();
+    }
+
+    return ProjectService.toPublicDeployment(deployment);
+  }
+
+  static async cancelDeployment(
+    userId: string,
+    id: string,
+    deploymentId: string,
+  ): Promise<PublicDeployment> {
+    await ProjectService.requireOwnedProject(userId, id);
+
+    const existing = await DeploymentRepository.findByIdForProject(
+      deploymentId,
+      id,
+    );
+
+    if (!existing) {
+      throw ProjectService.deploymentNotFound();
+    }
+
+    const canceled = await DeploymentRepository.markCanceled(deploymentId, id);
+
+    if (!canceled) {
+      throw new ApiError(
+        StatusCodes.CONFLICT,
+        ErrorMessage.DEPLOYMENT_NOT_CANCELABLE,
+        ErrorCode.DEPLOYMENT_NOT_CANCELABLE,
+      );
+    }
+
+    await DeploymentRunnerService.stop(deploymentId);
+
+    return ProjectService.toPublicDeployment(canceled);
+  }
+
   static projectNotFound(): ApiError {
     return new ApiError(
       StatusCodes.NOT_FOUND,
       ErrorMessage.PROJECT_NOT_FOUND,
       ErrorCode.NOT_FOUND,
     );
+  }
+
+  static deploymentNotFound(): ApiError {
+    return new ApiError(
+      StatusCodes.NOT_FOUND,
+      ErrorMessage.DEPLOYMENT_NOT_FOUND,
+      ErrorCode.NOT_FOUND,
+    );
+  }
+
+  private static async requireOwnedProject(
+    userId: string,
+    id: string,
+  ): Promise<Project> {
+    const project = await ProjectRepository.findById(id, userId);
+
+    if (!project) {
+      throw ProjectService.projectNotFound();
+    }
+
+    return project;
   }
 
   private static async requireRepository(

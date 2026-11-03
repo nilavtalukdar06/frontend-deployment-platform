@@ -53,6 +53,10 @@ const environmentVariableParams = z
   .object({ id: z.uuid(), key: environmentVariableKey })
   .strict();
 
+const deploymentParams = z
+  .object({ id: z.uuid(), deploymentId: z.uuid() })
+  .strict();
+
 export abstract class ProjectValidator {
   static readonly create = {
     body: z
@@ -117,6 +121,26 @@ export abstract class ProjectValidator {
 
   static readonly remove = {
     params: projectId,
+  };
+
+  static readonly redeploy = {
+    params: projectId,
+  };
+
+  static readonly listDeployments = {
+    params: projectId,
+    query: z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+    }),
+  };
+
+  static readonly getDeployment = {
+    params: deploymentParams,
+  };
+
+  static readonly cancelDeployment = {
+    params: deploymentParams,
   };
 
   static readonly listEnvironmentVariables = {

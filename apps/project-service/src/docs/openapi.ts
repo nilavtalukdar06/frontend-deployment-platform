@@ -3,7 +3,7 @@ import {
   ErrorMessage,
   SuccessMessage,
 } from "../constants/response-message.enum";
-import { projectFrameworks } from "../db/schema";
+import { deploymentStatuses, projectFrameworks } from "../db/schema";
 import {
   MAX_ENVIRONMENT_VARIABLES,
   MAX_ENVIRONMENT_VARIABLE_KEY_LENGTH,
@@ -67,6 +67,34 @@ const exampleProject = {
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
 
+const exampleDeployment = {
+  id: "0192f5a4-8c2f-7d4b-ae3f-6a9b2c3d4e5f",
+  projectId: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  status: "queued",
+  branch: "main",
+  commitSha: null,
+  framework: "vite",
+  rootDirectory: ".",
+  installCommand: "npm install",
+  buildCommand: "npm run build",
+  outputDirectory: "dist",
+  errorMessage: null,
+  startedAt: null,
+  finishedAt: null,
+  createdAt: "2026-11-03T10:15:00.000Z",
+  updatedAt: "2026-11-03T10:15:00.000Z",
+};
+
+const exampleReadyDeployment = {
+  ...exampleDeployment,
+  status: "ready",
+  commitSha: "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c",
+  errorMessage: null,
+  startedAt: "2026-11-03T10:15:05.000Z",
+  finishedAt: "2026-11-03T10:16:42.000Z",
+  updatedAt: "2026-11-03T10:16:42.000Z",
+};
+
 const exampleEnvironmentVariable = {
   key: "VITE_API_URL",
   value: "https://api.example.com",
@@ -107,6 +135,14 @@ const projectIdParameter: JsonObject = {
   in: "path",
   required: true,
   description: "Identifier of a project owned by the authenticated user.",
+  schema: { type: "string", format: "uuid" },
+};
+
+const deploymentIdParameter: JsonObject = {
+  name: "deploymentId",
+  in: "path",
+  required: true,
+  description: "Identifier of a deployment that belongs to the project.",
   schema: { type: "string", format: "uuid" },
 };
 
@@ -328,6 +364,102 @@ const schemas: Record<string, JsonObject> = {
       createdAt: { type: "string", format: "date-time" },
       updatedAt: { type: "string", format: "date-time" },
     },
+  },
+  DeploymentStatus: {
+    type: "string",
+    enum: [...deploymentStatuses],
+    description:
+      "Lifecycle of a deployment. A deployment starts `queued`, then the pipeline moves it through `cloning`, `installing`, `building` and `uploading` before it becomes `ready`; `failed` and `canceled` are the other terminal states. A project can have at most one deployment in a non-terminal status (`queued`, `cloning`, `installing`, `building`, `uploading`) at a time.",
+  },
+  Deployment: {
+    type: "object",
+    required: [
+      "id",
+      "projectId",
+      "status",
+      "branch",
+      "commitSha",
+      "framework",
+      "rootDirectory",
+      "installCommand",
+      "buildCommand",
+      "outputDirectory",
+      "errorMessage",
+      "startedAt",
+      "finishedAt",
+      "createdAt",
+      "updatedAt",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      projectId: { type: "string", format: "uuid" },
+      status: { $ref: "#/components/schemas/DeploymentStatus" },
+      branch: {
+        type: "string",
+        description:
+          "Snapshot of the project's `branch` at the moment the deployment was created; later changes to the project do not affect a deployment that already exists.",
+      },
+      commitSha: {
+        type: ["string", "null"],
+        pattern: "^[0-9a-f]{40}$",
+        description:
+          "The commit the pipeline checked out, filled in once cloning has resolved the branch. `null` while still `queued`.",
+      },
+      framework: { $ref: "#/components/schemas/ProjectFramework" },
+      rootDirectory: { type: "string" },
+      installCommand: { type: "string" },
+      buildCommand: { type: "string" },
+      outputDirectory: { type: "string" },
+      errorMessage: {
+        type: ["string", "null"],
+        description:
+          "Why the deployment `failed`, prefixed with the pipeline step that failed (for example `[initialize]`). `null` unless the status is `failed`.",
+      },
+      startedAt: {
+        type: ["string", "null"],
+        format: "date-time",
+        description: "When the pipeline began work. `null` while `queued`.",
+      },
+      finishedAt: {
+        type: ["string", "null"],
+        format: "date-time",
+        description:
+          "When the deployment reached a terminal status (`ready`, `failed` or `canceled`). `null` before then.",
+      },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  DeploymentResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: { data: { $ref: "#/components/schemas/Deployment" } },
+      },
+    ],
+  },
+  DeploymentList: {
+    type: "object",
+    required: ["items", "pagination"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/Deployment" },
+      },
+      pagination: { $ref: "#/components/schemas/Pagination" },
+    },
+  },
+  DeploymentListResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: { data: { $ref: "#/components/schemas/DeploymentList" } },
+      },
+    ],
   },
   Pagination: {
     type: "object",
@@ -642,6 +774,26 @@ const responses: Record<string, JsonObject> = {
       ErrorMessage.REPOSITORY_ALREADY_IMPORTED,
     ),
   ),
+  DeploymentInProgress: errorResponse(
+    "The project already has a deployment in a non-terminal status (`queued`, `cloning`, `installing`, `building` or `uploading`). Wait for it to finish before starting another.",
+    errorExample(
+      409,
+      ErrorCode.DEPLOYMENT_IN_PROGRESS,
+      ErrorMessage.DEPLOYMENT_IN_PROGRESS,
+    ),
+  ),
+  DeploymentNotFound: errorResponse(
+    "The project exists but has no deployment with this id. Deployments of other projects are reported the same way.",
+    errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.DEPLOYMENT_NOT_FOUND),
+  ),
+  DeploymentNotCancelable: errorResponse(
+    "The deployment is already in a terminal status (`ready`, `failed` or `canceled`), so it can no longer be canceled.",
+    errorExample(
+      409,
+      ErrorCode.DEPLOYMENT_NOT_CANCELABLE,
+      ErrorMessage.DEPLOYMENT_NOT_CANCELABLE,
+    ),
+  ),
   TooManyRequests: errorResponse(
     "The per-client rate limit was exceeded (`RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`). Standard `RateLimit-*` headers are returned on every response.",
     errorExample(
@@ -873,6 +1025,178 @@ const deleteProject: JsonObject = {
   },
 };
 
+const createDeployment: JsonObject = {
+  tags: ["Deployments"],
+  operationId: "createDeployment",
+  summary: "Redeploy a project",
+  description:
+    "Starts a fresh deployment of an existing project without changing it, the equivalent of Vercel's \"Redeploy\". The project's current build settings (`branch`, `framework`, `rootDirectory`, `installCommand`, `buildCommand`, `outputDirectory`) and its current environment variables are used, so this is how you ship an updated commit or pick up changed environment variables. A new `queued` deployment is created and an AWS ECS (Fargate) task running the deployment pipeline is launched for it exactly as on project creation, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` passed as container environment variables; if the task cannot be started the deployment is marked `failed` with a `[initialize]` error message. The repository is not re-validated up front: if access was revoked or the branch no longer exists the deployment fails in its `cloning` step. Only one deployment can be in a non-terminal status per project, so a `409` is returned while a previous deployment is still running. The new deployment is returned with status `queued`; the response is `202 Accepted` because the build runs asynchronously.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter],
+  responses: {
+    "202": {
+      description: "The deployment was created and its build was started.",
+      content: jsonContent("DeploymentResponse", {
+        success: true,
+        statusCode: 202,
+        message: SuccessMessage.DEPLOYMENT_STARTED,
+        data: exampleDeployment,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    "409": ref("DeploymentInProgress"),
+    ...githubErrorResponses,
+  },
+};
+
+const listDeployments: JsonObject = {
+  tags: ["Deployments"],
+  operationId: "listDeployments",
+  summary: "List a project's deployments",
+  description:
+    "Every deployment of the project, newest first, including the one created when the project was imported. Use it to poll the status of a deployment started with `POST /projects/{id}/deployments`.",
+  security: userIdSecurity,
+  parameters: [
+    projectIdParameter,
+    {
+      name: "page",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, default: 1 },
+    },
+    {
+      name: "limit",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+    },
+  ],
+  responses: {
+    "200": {
+      description: "A page of deployments.",
+      content: jsonContent("DeploymentListResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.DEPLOYMENTS_RETRIEVED,
+        data: {
+          items: [exampleReadyDeployment, exampleDeployment],
+          pagination: { page: 1, limit: 20, total: 2, totalPages: 1 },
+        },
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    ...protectedErrorResponses,
+  },
+};
+
+const getDeployment: JsonObject = {
+  tags: ["Deployments"],
+  operationId: "getDeployment",
+  summary: "Get a deployment",
+  description:
+    "Returns a single deployment of the project, including its current status, the commit it built and any error message.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter, deploymentIdParameter],
+  responses: {
+    "200": {
+      description: "The deployment.",
+      content: jsonContent("DeploymentResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.DEPLOYMENT_RETRIEVED,
+        data: exampleReadyDeployment,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": {
+      description:
+        "`PROJECT_NOT_FOUND`: the project does not exist for this user. `DEPLOYMENT_NOT_FOUND`: the project has no deployment with this id. Both use the `NOT_FOUND` error code.",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
+          examples: {
+            project: {
+              summary: "Project not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.PROJECT_NOT_FOUND,
+              ),
+            },
+            deployment: {
+              summary: "Deployment not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.DEPLOYMENT_NOT_FOUND,
+              ),
+            },
+          },
+        },
+      },
+    },
+    ...protectedErrorResponses,
+  },
+};
+
+const cancelDeployment: JsonObject = {
+  tags: ["Deployments"],
+  operationId: "cancelDeployment",
+  summary: "Cancel a deployment",
+  description:
+    "Cancels a deployment that is still in progress (status `queued`, `cloning`, `installing`, `building` or `uploading`). The deployment is marked `canceled` and the pipeline stops at its next step, and a best-effort request is made to stop the AWS ECS task running it. A deployment that has already reached a terminal status (`ready`, `failed` or `canceled`) cannot be canceled and returns `409`. Returns the canceled deployment.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter, deploymentIdParameter],
+  responses: {
+    "200": {
+      description: "The canceled deployment.",
+      content: jsonContent("DeploymentResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.DEPLOYMENT_CANCELED,
+        data: {
+          ...exampleDeployment,
+          status: "canceled",
+          finishedAt: "2026-11-03T10:15:30.000Z",
+          updatedAt: "2026-11-03T10:15:30.000Z",
+        },
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": {
+      description:
+        "`PROJECT_NOT_FOUND`: the project does not exist for this user. `DEPLOYMENT_NOT_FOUND`: the project has no deployment with this id. Both use the `NOT_FOUND` error code.",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
+          examples: {
+            project: {
+              summary: "Project not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.PROJECT_NOT_FOUND,
+              ),
+            },
+            deployment: {
+              summary: "Deployment not found",
+              value: errorExample(
+                404,
+                ErrorCode.NOT_FOUND,
+                ErrorMessage.DEPLOYMENT_NOT_FOUND,
+              ),
+            },
+          },
+        },
+      },
+    },
+    "409": ref("DeploymentNotCancelable"),
+    ...protectedErrorResponses,
+  },
+};
+
 const listEnvironmentVariables: JsonObject = {
   tags: ["Environment variables"],
   operationId: "listEnvironmentVariables",
@@ -992,6 +1316,11 @@ export const openApiDocument: JsonObject = {
       description: "Create, list, read, update and delete projects.",
     },
     {
+      name: "Deployments",
+      description:
+        "Builds of a project. Created on project import and on redeploy, then run asynchronously by the deployment pipeline.",
+    },
+    {
       name: "Environment variables",
       description:
         "Encrypted per-project variables passed to the install and build commands of each deployment.",
@@ -1005,6 +1334,14 @@ export const openApiDocument: JsonObject = {
       get: getProject,
       patch: updateProject,
       delete: deleteProject,
+    },
+    "/projects/{id}/deployments": {
+      post: createDeployment,
+      get: listDeployments,
+    },
+    "/projects/{id}/deployments/{deploymentId}": { get: getDeployment },
+    "/projects/{id}/deployments/{deploymentId}/cancel": {
+      post: cancelDeployment,
     },
     "/projects/{id}/environment-variables": { get: listEnvironmentVariables },
     "/projects/{id}/environment-variables/{key}": {
