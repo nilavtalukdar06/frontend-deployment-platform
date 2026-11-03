@@ -1,6 +1,11 @@
 import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import { projects, type NewProject, type Project } from "../db/schema";
+import {
+  deployments,
+  projects,
+  type NewProject,
+  type Project,
+} from "../db/schema";
 
 export type ProjectChanges = Partial<
   Omit<
@@ -27,13 +32,25 @@ export abstract class ProjectRepository {
   static async create(
     data: Omit<NewProject, "id" | "createdAt" | "updatedAt" | "deletedAt">,
   ): Promise<Project> {
-    const [project] = await db.insert(projects).values(data).returning();
+    return db.transaction(async (tx) => {
+      const [project] = await tx.insert(projects).values(data).returning();
 
-    if (!project) {
-      throw new Error("project insert returned no rows");
-    }
+      if (!project) {
+        throw new Error("project insert returned no rows");
+      }
 
-    return project;
+      await tx.insert(deployments).values({
+        projectId: project.id,
+        branch: project.branch,
+        framework: project.framework,
+        rootDirectory: project.rootDirectory,
+        installCommand: project.installCommand,
+        buildCommand: project.buildCommand,
+        outputDirectory: project.outputDirectory,
+      });
+
+      return project;
+    });
   }
 
   static async findById(
