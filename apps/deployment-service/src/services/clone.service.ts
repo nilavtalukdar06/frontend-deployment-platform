@@ -24,6 +24,13 @@ const toAuthenticatedUrl = (repositoryUrl: string, token: string): string => {
   return `https://x-access-token:${encodeURIComponent(token)}@github.com/${match[1]}/${match[2]}.git`;
 };
 
+const ambientEnvWithoutGitVars = (): NodeJS.ProcessEnv =>
+  Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !key.toUpperCase().startsWith("GIT_"),
+    ),
+  );
+
 export abstract class CloneService {
   static async clone(params: {
     repositoryUrl: string;
@@ -38,8 +45,11 @@ export abstract class CloneService {
     await mkdir(destination, { recursive: true });
 
     try {
-      await simpleGit({ timeout: { block: 5 * 60 * 1000 } })
-        .env({ ...process.env, GIT_TERMINAL_PROMPT: "0" })
+      await simpleGit({
+        timeout: { block: 5 * 60 * 1000 },
+        allowEnvironment: ["GIT_TERMINAL_PROMPT"],
+      })
+        .env({ ...ambientEnvWithoutGitVars(), GIT_TERMINAL_PROMPT: "0" })
         .clone(authenticatedUrl, destination, [
           "--depth",
           "1",
