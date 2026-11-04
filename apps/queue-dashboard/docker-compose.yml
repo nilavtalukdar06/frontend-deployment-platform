@@ -1,0 +1,36 @@
+services:
+  queue-dashboard:
+    build:
+      context: ../..
+      dockerfile: apps/queue-dashboard/Dockerfile
+    container_name: queue-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 4002
+      REDIS_URL: ${REDIS_URL:-redis://host.docker.internal:6380}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${QUEUE_DASHBOARD_PORT:-4002}:4002"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:4002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - queue-dashboard-network
+
+networks:
+  queue-dashboard-network:
+    driver: bridge
