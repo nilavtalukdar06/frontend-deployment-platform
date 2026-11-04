@@ -43,6 +43,8 @@ export const projects = pgTable(
     installCommand: text().notNull().default("npm install"),
     buildCommand: text().notNull().default("npm run build"),
     outputDirectory: text().notNull().default("dist"),
+    githubWebhookId: bigint({ mode: "number" }),
+    githubWebhookSecret: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp({ withTimezone: true }),
@@ -60,6 +62,10 @@ export const projects = pgTable(
     check(
       "projects_name_length_check",
       sql`char_length(${table.name}) between 1 and 100`,
+    ),
+    check(
+      "projects_github_webhook_pair_check",
+      sql`(${table.githubWebhookId} is null) = (${table.githubWebhookSecret} is null)`,
     ),
   ],
 );

@@ -4,12 +4,22 @@ import { logger } from "./lib/logger";
 import { closePostgres } from "./lib/postgres";
 import { runDeploymentPipeline } from "./pipeline/deployment.pipeline";
 import { DeploymentRepository } from "./repositories/deployment.repository";
+import { DeploymentLockService } from "./services/deployment-lock.service";
 
 let exiting = false;
+let lockOwner: { userId: string; deploymentId: string } | undefined;
 
 const exit = async (code: number): Promise<never> => {
   if (!exiting) {
     exiting = true;
+
+    if (lockOwner) {
+      await DeploymentLockService.release(
+        lockOwner.userId,
+        lockOwner.deploymentId,
+      );
+    }
+
     await closePostgres();
     logger.flush();
   }
@@ -38,6 +48,8 @@ const main = async (): Promise<never> => {
     );
     return exit(1);
   }
+
+  lockOwner = { userId, deploymentId };
 
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.once(signal, () => {

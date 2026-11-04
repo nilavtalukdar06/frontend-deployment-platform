@@ -1,32 +1,45 @@
 import type { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
+import { isWebhookRoute } from "../config/webhook-routes";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { ApiError } from "../utils/api-error";
 
-export const payloadTooLargeError = (): ApiError =>
+export const payloadTooLargeError = (
+  maxBytes: number = env.MAX_REQUEST_BODY_BYTES,
+): ApiError =>
   new ApiError(
     StatusCodes.REQUEST_TOO_LONG,
     ErrorMessage.PAYLOAD_TOO_LARGE,
     ErrorCode.PAYLOAD_TOO_LARGE,
-    { maxBytes: env.MAX_REQUEST_BODY_BYTES },
+    { maxBytes },
   );
+
+export const createBodyLimit =
+  (maxBytes: number) =>
+  (req: Request, _res: Response, next: NextFunction): void => {
+    const contentLength = Number(req.headers["content-length"]);
+
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      next(payloadTooLargeError(maxBytes));
+      return;
+    }
+
+    next();
+  };
+
+const defaultBodyLimit = createBodyLimit(env.MAX_REQUEST_BODY_BYTES);
 
 export const bodyLimit = (
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void => {
-  const contentLength = Number(req.headers["content-length"]);
-
-  if (
-    Number.isFinite(contentLength) &&
-    contentLength > env.MAX_REQUEST_BODY_BYTES
-  ) {
-    next(payloadTooLargeError());
+  if (isWebhookRoute(req)) {
+    next();
     return;
   }
 
-  next();
+  defaultBodyLimit(req, res, next);
 };

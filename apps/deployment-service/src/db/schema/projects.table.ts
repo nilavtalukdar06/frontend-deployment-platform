@@ -45,6 +45,8 @@ export const projects = pgTable(
     installCommand: text().notNull().default("npm install"),
     buildCommand: text().notNull().default("npm run build"),
     outputDirectory: text().notNull().default("dist"),
+    githubWebhookId: bigint({ mode: "number" }),
+    githubWebhookSecret: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp({ withTimezone: true }),

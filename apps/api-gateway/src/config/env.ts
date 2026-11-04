@@ -21,6 +21,11 @@ export const env = createEnv({
     HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
 
     MAX_REQUEST_BODY_BYTES: z.coerce.number().int().positive().default(65_536),
+    MAX_WEBHOOK_BODY_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5 * 1024 * 1024),
 
     CORS_ORIGIN: z.string().default("*"),
 
@@ -36,6 +41,12 @@ export const env = createEnv({
       .positive()
       .default(15 * 60 * 1000),
     CREDENTIAL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+    WEBHOOK_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60 * 1000),
+    WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
 
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

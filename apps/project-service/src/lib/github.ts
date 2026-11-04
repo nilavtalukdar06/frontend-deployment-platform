@@ -16,15 +16,22 @@ export const githubUnavailableError = (): ApiError =>
     ErrorCode.SERVICE_UNAVAILABLE,
   );
 
+export interface GithubRequestInit {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+}
+
 export const githubFetch = async (
   url: string,
   accessToken: string,
   accept: string = GITHUB_JSON,
+  { method = "GET", body }: GithubRequestInit = {},
 ): Promise<Response> => {
   let response: Response;
 
   try {
     response = await fetch(url, {
+      method,
       redirect: "manual",
       signal: AbortSignal.timeout(env.GITHUB_API_TIMEOUT_MS),
       headers: {
@@ -32,7 +39,9 @@ export const githubFetch = async (
         Authorization: `Bearer ${accessToken}`,
         "User-Agent": "react-deployment-platform-project-service",
         "X-GitHub-Api-Version": "2022-11-28",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       },
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (err) {
     logger.error({ err }, "github request could not be completed");

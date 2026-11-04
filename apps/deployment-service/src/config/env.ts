@@ -12,6 +12,7 @@ export const env = createEnv({
     GITHUB_TOKEN_ENCRYPTED: z.string().min(1).optional(),
 
     DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url(),
 
     ENV_ENCRYPTION_KEY: z
       .string()

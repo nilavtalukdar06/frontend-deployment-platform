@@ -28,6 +28,13 @@ export const deploymentStatuses = [
 
 export const deploymentStatus = pgEnum("deployment_status", deploymentStatuses);
 
+export const deploymentTriggers = ["create", "manual", "push"] as const;
+
+export const deploymentTrigger = pgEnum(
+  "deployment_trigger",
+  deploymentTriggers,
+);
+
 export const deployments = pgTable(
   "deployments",
   {
@@ -38,6 +45,7 @@ export const deployments = pgTable(
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
     status: deploymentStatus().notNull().default("queued"),
+    trigger: deploymentTrigger().notNull().default("manual"),
     branch: text().notNull(),
     commitSha: text(),
     framework: projectFramework().notNull(),

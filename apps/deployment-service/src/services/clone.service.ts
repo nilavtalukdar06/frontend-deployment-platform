@@ -31,47 +31,74 @@ const ambientEnvWithoutGitVars = (): NodeJS.ProcessEnv =>
     ),
   );
 
+const createGit = (baseDir?: string) =>
+  simpleGit({
+    ...(baseDir ? { baseDir } : {}),
+    timeout: { block: 5 * 60 * 1000 },
+    allowEnvironment: ["GIT_TERMINAL_PROMPT"],
+  }).env({ ...ambientEnvWithoutGitVars(), GIT_TERMINAL_PROMPT: "0" });
+
 export abstract class CloneService {
   static async clone(params: {
     repositoryUrl: string;
     branch: string;
+    commitSha?: string | null;
     token: string;
     destination: string;
   }): Promise<string> {
-    const { repositoryUrl, branch, token, destination } = params;
+    const { repositoryUrl, branch, commitSha, token, destination } = params;
     const authenticatedUrl = toAuthenticatedUrl(repositoryUrl, token);
+    const target = commitSha ? `commit "${commitSha}"` : `branch "${branch}"`;
 
     await rm(destination, { recursive: true, force: true });
     await mkdir(destination, { recursive: true });
 
     try {
-      await simpleGit({
-        timeout: { block: 5 * 60 * 1000 },
-        allowEnvironment: ["GIT_TERMINAL_PROMPT"],
-      })
-        .env({ ...ambientEnvWithoutGitVars(), GIT_TERMINAL_PROMPT: "0" })
-        .clone(authenticatedUrl, destination, [
+      if (commitSha) {
+        if (!commitShaPattern.test(commitSha)) {
+          throw new Error(`invalid commit sha "${commitSha}"`);
+        }
+
+        const git = createGit(destination);
+        await git.init();
+        await git.fetch([
+          "--depth",
+          "1",
+          "--no-tags",
+          authenticatedUrl,
+          commitSha,
+        ]);
+        await git.checkout(["--detach", "FETCH_HEAD"]);
+      } else {
+        await createGit().clone(authenticatedUrl, destination, [
           "--depth",
           "1",
           "--single-branch",
           "--branch",
           branch,
         ]);
+      }
 
-      const commitSha = (
+      const checkedOutSha = (
         await simpleGit(destination).revparse(["HEAD"])
       ).trim();
 
-      if (!commitShaPattern.test(commitSha)) {
-        throw new Error(`unexpected commit sha "${commitSha}"`);
+      if (!commitShaPattern.test(checkedOutSha)) {
+        throw new Error(`unexpected commit sha "${checkedOutSha}"`);
       }
 
-      return commitSha;
+      if (commitSha && checkedOutSha !== commitSha) {
+        throw new Error(
+          `checked out "${checkedOutSha}" instead of "${commitSha}"`,
+        );
+      }
+
+      return checkedOutSha;
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       throw new DeploymentError(
         DeploymentStep.CLONE,
-        `failed to clone branch "${branch}": ${redact(redact(reason, encodeURIComponent(token)), token)}`,
+        `failed to clone ${target}: ${redact(redact(reason, encodeURIComponent(token)), token)}`,
       );
     }
   }

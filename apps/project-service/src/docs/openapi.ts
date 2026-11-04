@@ -3,7 +3,11 @@ import {
   ErrorMessage,
   SuccessMessage,
 } from "../constants/response-message.enum";
-import { deploymentStatuses, projectFrameworks } from "../db/schema";
+import {
+  deploymentStatuses,
+  deploymentTriggers,
+  projectFrameworks,
+} from "../db/schema";
 import { packageManagers } from "../constants/package-manager";
 import { runtimes } from "../constants/runtime";
 import {
@@ -67,6 +71,7 @@ const exampleProject = {
   installCommand: "npm install",
   buildCommand: "npm run build",
   outputDirectory: "dist",
+  autoDeploy: true,
   createdAt: "2026-11-03T09:30:00.000Z",
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
@@ -75,6 +80,7 @@ const exampleDeployment = {
   id: "0192f5a4-8c2f-7d4b-ae3f-6a9b2c3d4e5f",
   projectId: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
   status: "queued",
+  trigger: "manual",
   branch: "main",
   commitSha: null,
   framework: "vite",
@@ -118,6 +124,12 @@ const exampleRepository = {
   url: "https://github.com/acme/marketing-site",
   pushedAt: "2026-11-02T18:04:11Z",
   imported: false,
+};
+
+const examplePushDeployment = {
+  ...exampleDeployment,
+  trigger: "push",
+  commitSha: "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c",
 };
 
 const sharedErrorResponses = {
@@ -364,6 +376,7 @@ const schemas: Record<string, JsonObject> = {
       "installCommand",
       "buildCommand",
       "outputDirectory",
+      "autoDeploy",
       "createdAt",
       "updatedAt",
     ],
@@ -403,15 +416,64 @@ const schemas: Record<string, JsonObject> = {
       installCommand: { type: "string" },
       buildCommand: { type: "string" },
       outputDirectory: { type: "string" },
+      autoDeploy: {
+        type: "boolean",
+        description:
+          "Whether a GitHub push webhook is installed on the repository, so pushes to the project's `branch` by the repository owner or a collaborator deploy automatically. Installing a webhook needs admin access to the repository, so this is `false` when the importing user is not a repository admin; enable it later with `POST /projects/{id}/webhook`.",
+      },
       createdAt: { type: "string", format: "date-time" },
       updatedAt: { type: "string", format: "date-time" },
     },
+  },
+  DeploymentTrigger: {
+    type: "string",
+    enum: [...deploymentTriggers],
+    description:
+      "What created the deployment: `create` for the first deployment made when the project was imported, `manual` for `POST /projects/{id}/deployments`, and `push` for a push to the project's `branch` received through the GitHub webhook.",
+  },
+  WebhookIgnoredData: {
+    type: "object",
+    required: ["reason"],
+    properties: {
+      reason: {
+        type: "string",
+        description: "Why the event did not start a deployment.",
+        example: 'ref "refs/heads/feature" is not the production branch',
+      },
+    },
+  },
+  WebhookQueuedData: {
+    type: "object",
+    required: ["deploymentId"],
+    properties: { deploymentId: { type: "string", format: "uuid" } },
+  },
+  WebhookIgnoredResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        properties: {
+          data: { $ref: "#/components/schemas/WebhookIgnoredData" },
+        },
+      },
+    ],
+  },
+  WebhookQueuedResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        properties: {
+          data: { $ref: "#/components/schemas/WebhookQueuedData" },
+        },
+      },
+    ],
   },
   DeploymentStatus: {
     type: "string",
     enum: [...deploymentStatuses],
     description:
-      "Lifecycle of a deployment. A deployment starts `queued`, then the pipeline moves it through `cloning`, `installing`, `building` and `uploading` before it becomes `ready`; `failed` and `canceled` are the other terminal states. A project can have at most one deployment in a non-terminal status (`queued`, `cloning`, `installing`, `building`, `uploading`) at a time.",
+      "Lifecycle of a deployment. A deployment starts `queued`, then the pipeline moves it through `cloning`, `installing`, `building` and `uploading` before it becomes `ready`; `failed` and `canceled` are the other terminal states. A deployment stays `queued` while another deployment of the same user is running, because each user runs at most one deployment at a time; a project can have several deployments waiting in `queued`.",
   },
   Deployment: {
     type: "object",
@@ -419,6 +481,7 @@ const schemas: Record<string, JsonObject> = {
       "id",
       "projectId",
       "status",
+      "trigger",
       "branch",
       "commitSha",
       "framework",
@@ -438,6 +501,7 @@ const schemas: Record<string, JsonObject> = {
       id: { type: "string", format: "uuid" },
       projectId: { type: "string", format: "uuid" },
       status: { $ref: "#/components/schemas/DeploymentStatus" },
+      trigger: { $ref: "#/components/schemas/DeploymentTrigger" },
       branch: {
         type: "string",
         description:
@@ -447,7 +511,7 @@ const schemas: Record<string, JsonObject> = {
         type: ["string", "null"],
         pattern: "^[0-9a-f]{40}$",
         description:
-          "The commit the pipeline checked out, filled in once cloning has resolved the branch. `null` while still `queued`.",
+          "The commit the pipeline checked out. A `push` deployment is created with the pushed commit and the pipeline checks out exactly that commit; other deployments build the latest commit of `branch` and are filled in once cloning has resolved it, so they are `null` while still `queued`.",
       },
       framework: { $ref: "#/components/schemas/ProjectFramework" },
       rootDirectory: { type: "string" },
@@ -780,7 +844,8 @@ const responses: Record<string, JsonObject> = {
             ),
           },
           packageManagerCommandMismatch: {
-            summary: "Install command does not use the project's package manager",
+            summary:
+              "Install command does not use the project's package manager",
             value: errorExample(
               422,
               ErrorCode.PACKAGE_MANAGER_COMMAND_MISMATCH,
@@ -838,13 +903,33 @@ const responses: Record<string, JsonObject> = {
       ErrorMessage.REPOSITORY_ALREADY_IMPORTED,
     ),
   ),
-  DeploymentInProgress: errorResponse(
-    "The project already has a deployment in a non-terminal status (`queued`, `cloning`, `installing`, `building` or `uploading`). Wait for it to finish before starting another.",
+  WebhookPermissionDenied: errorResponse(
+    "The webhook could not be installed because the user does not have admin access to the repository (GitHub answered 403 or 404). Only a repository admin can install webhooks; the project keeps `autoDeploy: false`.",
     errorExample(
-      409,
-      ErrorCode.DEPLOYMENT_IN_PROGRESS,
-      ErrorMessage.DEPLOYMENT_IN_PROGRESS,
+      422,
+      ErrorCode.WEBHOOK_PERMISSION_DENIED,
+      ErrorMessage.WEBHOOK_PERMISSION_DENIED,
     ),
+  ),
+  InvalidWebhookSignature: errorResponse(
+    "The `X-Hub-Signature-256` header is missing or is not the HMAC-SHA256 of the raw request body with the project's webhook secret.",
+    errorExample(
+      401,
+      ErrorCode.INVALID_WEBHOOK_SIGNATURE,
+      ErrorMessage.INVALID_WEBHOOK_SIGNATURE,
+    ),
+  ),
+  InvalidWebhookPayload: errorResponse(
+    "The body is not JSON, a `push` event is missing the `X-GitHub-Delivery` header, or the push payload does not have the expected shape. Path parameter validation errors use `VALIDATION_ERROR` instead.",
+    errorExample(
+      400,
+      ErrorCode.BAD_REQUEST,
+      ErrorMessage.INVALID_WEBHOOK_PAYLOAD,
+    ),
+  ),
+  WebhookProjectNotFound: errorResponse(
+    "No active project with this id exists, or the project has no webhook installed.",
+    errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.PROJECT_NOT_FOUND),
   ),
   DeploymentNotFound: errorResponse(
     "The project exists but has no deployment with this id. Deployments of other projects are reported the same way.",
@@ -914,7 +999,7 @@ const createProject: JsonObject = {
   operationId: "createProject",
   summary: "Create a project from a GitHub repository",
   description:
-    "Imports a repository picked from `GET /projects/repositories`. Using the user's GitHub token (fetched from the auth-service), the repository is looked up by id and must be accessible with push access, then the framework is detected from its default branch (no clone) and must be Vite. On success the project, its environment variables (encrypted) and its first `queued` deployment are stored in one transaction with a unique two-word slug, and the project is returned. Once that transaction has committed, an AWS ECS (Fargate) task running the deployment pipeline is started for the deployment with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` (the user's GitHub token, AES-256-GCM encrypted with `ENV_ENCRYPTION_KEY`) passed as container environment variables, so the pipeline never needs to call the auth-service; the pipeline then moves the deployment through its statuses. If the task cannot be started (ECS unreachable, rejected the request or returned no task) the deployment is marked `failed` with a `[initialize]` error message and the project is still returned, so the request does not fail. Environment variables are not part of the response; read them with `GET /projects/{id}/environment-variables`. If a random slug is already taken a new one is generated; `409 CONFLICT` is returned only after repeated collisions.",
+    "Imports a repository picked from `GET /projects/repositories`. Using the user's GitHub token (fetched from the auth-service), the repository is looked up by id and must be accessible with push access, then the framework is detected from its default branch (no clone) and must be Vite. On success the project, its environment variables (encrypted) and its first `queued` deployment (trigger `create`) are stored in one transaction with a unique two-word slug, and the project is returned. Once that transaction has committed, a GitHub push webhook is installed on the repository pointing at `{PUBLIC_API_URL}/webhooks/github/projects/{id}` with a random per-project secret (stored encrypted), so later pushes to the project's `branch` deploy automatically; this needs admin access to the repository and never fails the request, and `autoDeploy` in the response tells whether it succeeded. Then the deployment is queued. Deployments are not started directly: the deployment is pushed onto a BullMQ queue (`deployments`, Redis) and the separate `deployment-worker` application launches an AWS ECS (Fargate) task running the deployment pipeline for it, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` (the user's GitHub token, fetched from the auth-service when the task is launched and AES-256-GCM encrypted with `ENV_ENCRYPTION_KEY`) passed as container environment variables. Each user runs at most one deployment at a time: the worker holds a per-user Redis lock while the deployment runs, and any other deployment of the same user stays `queued` until the running one finishes, while deployments of other users run in parallel. If the task cannot be started (ECS unreachable, rejected the request or returned no task), the queue cannot be reached, or the user's GitHub authorization is missing when the task is launched, the deployment is marked `failed` with a `[initialize]` error message. The project is still returned when the deployment fails to start, so the request does not fail. Environment variables are not part of the response; read them with `GET /projects/{id}/environment-variables`. If a random slug is already taken a new one is generated; `409 CONFLICT` is returned only after repeated collisions.",
   security: userIdSecurity,
   requestBody: {
     required: true,
@@ -1071,7 +1156,7 @@ const deleteProject: JsonObject = {
   operationId: "deleteProject",
   summary: "Delete a project",
   description:
-    "Soft delete. The project disappears from every endpoint and its name becomes available again.",
+    "Soft delete. The project disappears from every endpoint and its name becomes available again. If the project has a GitHub push webhook it is removed from the repository on a best-effort basis; a failure to remove it does not fail the request, and pushes delivered afterwards are rejected with `404`.",
   security: userIdSecurity,
   parameters: [projectIdParameter],
   responses: {
@@ -1094,22 +1179,21 @@ const createDeployment: JsonObject = {
   operationId: "createDeployment",
   summary: "Redeploy a project",
   description:
-    "Starts a fresh deployment of an existing project without changing it, the equivalent of Vercel's \"Redeploy\". The project's current build settings (`branch`, `framework`, `rootDirectory`, `packageManager`, `runtime`, `installCommand`, `buildCommand`, `outputDirectory`) and its current environment variables are used, so this is how you ship an updated commit or pick up changed environment variables. A new `queued` deployment is created and an AWS ECS (Fargate) task running the deployment pipeline is launched for it exactly as on project creation, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` passed as container environment variables; if the task cannot be started the deployment is marked `failed` with a `[initialize]` error message. The repository is not re-validated up front: if access was revoked or the branch no longer exists the deployment fails in its `cloning` step. Only one deployment can be in a non-terminal status per project, so a `409` is returned while a previous deployment is still running. The new deployment is returned with status `queued`; the response is `202 Accepted` because the build runs asynchronously.",
+    "Starts a fresh deployment of an existing project without changing it, the equivalent of Vercel's \"Redeploy\". The project's current build settings (`branch`, `framework`, `rootDirectory`, `packageManager`, `runtime`, `installCommand`, `buildCommand`, `outputDirectory`) and its current environment variables are used, so this is how you ship an updated commit or pick up changed environment variables. The user's GitHub authorization is checked, then a new `queued` deployment (trigger `manual`) is created and queued exactly as on project creation. Deployments are not started directly: the deployment is pushed onto a BullMQ queue (`deployments`, Redis) and the separate `deployment-worker` application launches an AWS ECS (Fargate) task running the deployment pipeline for it, with `DEPLOYMENT_ID`, `USER_ID` and `GITHUB_TOKEN_ENCRYPTED` (the user's GitHub token, fetched from the auth-service when the task is launched and AES-256-GCM encrypted with `ENV_ENCRYPTION_KEY`) passed as container environment variables. Each user runs at most one deployment at a time: the worker holds a per-user Redis lock while the deployment runs, and any other deployment of the same user stays `queued` until the running one finishes, while deployments of other users run in parallel. If the task cannot be started (ECS unreachable, rejected the request or returned no task), the queue cannot be reached, or the user's GitHub authorization is missing when the task is launched, the deployment is marked `failed` with a `[initialize]` error message. The repository is not re-validated up front: if access was revoked or the branch no longer exists the deployment fails in its `cloning` step. A redeploy is accepted even while other deployments of the project or the user are running; it waits in `queued` until the user's running deployment finishes. The new deployment is returned with status `queued`; the response is `202 Accepted` because the build runs asynchronously.",
   security: userIdSecurity,
   parameters: [projectIdParameter],
   responses: {
     "202": {
-      description: "The deployment was created and its build was started.",
+      description: "The deployment was created and queued.",
       content: jsonContent("DeploymentResponse", {
         success: true,
         statusCode: 202,
-        message: SuccessMessage.DEPLOYMENT_STARTED,
+        message: SuccessMessage.DEPLOYMENT_QUEUED,
         data: exampleDeployment,
       }),
     },
     "400": ref("ValidationError"),
     "404": ref("ProjectNotFound"),
-    "409": ref("DeploymentInProgress"),
     ...githubErrorResponses,
   },
 };
@@ -1144,7 +1228,7 @@ const listDeployments: JsonObject = {
         statusCode: 200,
         message: SuccessMessage.DEPLOYMENTS_RETRIEVED,
         data: {
-          items: [exampleReadyDeployment, exampleDeployment],
+          items: [examplePushDeployment, exampleReadyDeployment],
           pagination: { page: 1, limit: 20, total: 2, totalPages: 1 },
         },
       }),
@@ -1210,7 +1294,7 @@ const cancelDeployment: JsonObject = {
   operationId: "cancelDeployment",
   summary: "Cancel a deployment",
   description:
-    "Cancels a deployment that is still in progress (status `queued`, `cloning`, `installing`, `building` or `uploading`). The deployment is marked `canceled` and the pipeline stops at its next step, and a best-effort request is made to stop the AWS ECS task running it. A deployment that has already reached a terminal status (`ready`, `failed` or `canceled`) cannot be canceled and returns `409`. Returns the canceled deployment.",
+    "Cancels a deployment that is still in progress (status `queued`, `cloning`, `installing`, `building` or `uploading`). The deployment is marked `canceled`: a deployment still waiting in the queue is removed from it and never started, a running one stops at its next pipeline step and a best-effort request is made to stop the AWS ECS task running it. The user's per-user deployment lock is released, so the user's next queued deployment starts right away. A deployment that has already reached a terminal status (`ready`, `failed` or `canceled`) cannot be canceled and returns `409`. Returns the canceled deployment.",
   security: userIdSecurity,
   parameters: [projectIdParameter, deploymentIdParameter],
   responses: {
@@ -1365,6 +1449,177 @@ const deleteEnvironmentVariable: JsonObject = {
   },
 };
 
+const enableAutoDeploy: JsonObject = {
+  tags: ["Projects"],
+  operationId: "enableAutoDeploy",
+  summary: "Enable automatic deployments on push",
+  description:
+    "Installs, or reinstalls, the GitHub push webhook for the project using the user's GitHub token, with a new random secret, and returns the project with `autoDeploy: true`. Use it for projects imported before automatic deployments existed, for projects whose webhook could not be installed at import time, or to repair a webhook deleted on GitHub. A previously installed webhook is deleted first; if GitHub reports a webhook with the same URL already exists it is updated instead. The user must have admin access to the repository.",
+  security: userIdSecurity,
+  parameters: [projectIdParameter],
+  responses: {
+    "200": {
+      description: "The webhook is installed.",
+      content: jsonContent("ProjectResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.AUTO_DEPLOY_ENABLED,
+        data: exampleProject,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    "422": {
+      description:
+        "`INVALID_REPOSITORY`: the repository is no longer accessible with push access. `WEBHOOK_PERMISSION_DENIED`: the user is not an admin of the repository.",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
+          examples: {
+            invalidRepository: {
+              summary: "Repository not accessible",
+              value: errorExample(
+                422,
+                ErrorCode.INVALID_REPOSITORY,
+                ErrorMessage.INVALID_REPOSITORY,
+              ),
+            },
+            permissionDenied: {
+              summary: "Not a repository admin",
+              value: errorExample(
+                422,
+                ErrorCode.WEBHOOK_PERMISSION_DENIED,
+                ErrorMessage.WEBHOOK_PERMISSION_DENIED,
+              ),
+            },
+          },
+        },
+      },
+    },
+    ...githubErrorResponses,
+  },
+};
+
+const githubWebhook: JsonObject = {
+  tags: ["Webhooks"],
+  operationId: "receiveGithubWebhook",
+  summary: "Receive a GitHub webhook delivery",
+  description:
+    "Called by GitHub, not by clients. The URL is installed as the project's push webhook. It needs no user authentication: the raw body (`application/json`, at most `WEBHOOK_MAX_BODY_BYTES`, default 5 MiB) must be signed with the project's webhook secret in `X-Hub-Signature-256`, and this route is excluded from the per-client rate limit.\n\n- `ping` events answer `200`.\n- Other events, and `push` events that do not deploy, answer `202` with `data.reason`. A push is skipped when it is not for the project's repository, its `ref` is not `refs/heads/{branch}` of the project, it deletes the branch, or its `X-GitHub-Delivery` id was already processed (deliveries are remembered in Redis for 24 hours, so redeliveries never deploy twice).\n- A push is only deployed when its sender is the repository owner, or a collaborator of the repository as reported by GitHub (`GET /repos/{owner}/{repo}/collaborators/{username}` called with the project owner's GitHub token). Pushes by anyone else are skipped.\n- An accepted push creates a `queued` deployment with trigger `push` and `commitSha` set to the pushed commit (`after`), queues it like any other deployment and answers `202` with `data.deploymentId`.\n\nIf processing fails with a `5xx`, the delivery id is forgotten so a redelivery from GitHub is processed again.",
+  security: [],
+  parameters: [
+    {
+      name: "projectId",
+      in: "path",
+      required: true,
+      schema: { type: "string", format: "uuid" },
+    },
+    {
+      name: "X-GitHub-Event",
+      in: "header",
+      required: true,
+      schema: { type: "string", example: "push" },
+    },
+    {
+      name: "X-GitHub-Delivery",
+      in: "header",
+      required: true,
+      schema: { type: "string" },
+      description: "Unique delivery id, required for `push` events.",
+    },
+    {
+      name: "X-Hub-Signature-256",
+      in: "header",
+      required: true,
+      schema: { type: "string", pattern: "^sha256=[0-9a-f]{64}$" },
+    },
+  ],
+  requestBody: {
+    required: true,
+    content: {
+      "application/json": {
+        schema: {
+          type: "object",
+          description: "GitHub's webhook payload for the event.",
+        },
+      },
+    },
+  },
+  responses: {
+    "200": {
+      description: "A `ping` event was received.",
+      content: jsonContent("MessageResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.WEBHOOK_PONG,
+      }),
+    },
+    "202": {
+      description:
+        "The event was accepted. Either a deployment was queued for the pushed commit, or the event was ignored.",
+      content: {
+        "application/json": {
+          schema: {
+            oneOf: [
+              { $ref: "#/components/schemas/WebhookQueuedResponse" },
+              { $ref: "#/components/schemas/WebhookIgnoredResponse" },
+            ],
+          },
+          examples: {
+            queued: {
+              summary: "Deployment queued",
+              value: {
+                success: true,
+                statusCode: 202,
+                message: SuccessMessage.WEBHOOK_DEPLOYMENT_QUEUED,
+                data: { deploymentId: examplePushDeployment.id },
+              },
+            },
+            ignored: {
+              summary: "Event ignored",
+              value: {
+                success: true,
+                statusCode: 202,
+                message: SuccessMessage.WEBHOOK_IGNORED,
+                data: {
+                  reason:
+                    "pusher is not the repository owner or a collaborator",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "400": {
+      description:
+        "`VALIDATION_ERROR`: `projectId` is not a UUID. `BAD_REQUEST`: the payload could not be understood.",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/ErrorResponse" },
+          examples: {
+            invalidPayload: {
+              summary: "Invalid payload",
+              value: errorExample(
+                400,
+                ErrorCode.BAD_REQUEST,
+                ErrorMessage.INVALID_WEBHOOK_PAYLOAD,
+              ),
+            },
+          },
+        },
+      },
+    },
+    "401": ref("InvalidWebhookSignature"),
+    "404": ref("WebhookProjectNotFound"),
+    "413": {
+      description: "The body is larger than `WEBHOOK_MAX_BODY_BYTES`.",
+    },
+    "500": ref("InternalServerError"),
+    "503": ref("GithubUnavailable"),
+  },
+};
+
 export const openApiDocument: JsonObject = {
   openapi: "3.1.0",
   info: {
@@ -1389,6 +1644,11 @@ export const openApiDocument: JsonObject = {
       description:
         "Encrypted per-project variables passed to the install and build commands of each deployment.",
     },
+    {
+      name: "Webhooks",
+      description:
+        "Inbound GitHub webhooks that deploy pushes to a project's production branch.",
+    },
   ],
   paths: {
     "/health": { get: health },
@@ -1399,6 +1659,7 @@ export const openApiDocument: JsonObject = {
       patch: updateProject,
       delete: deleteProject,
     },
+    "/projects/{id}/webhook": { post: enableAutoDeploy },
     "/projects/{id}/deployments": {
       post: createDeployment,
       get: listDeployments,
@@ -1412,6 +1673,7 @@ export const openApiDocument: JsonObject = {
       put: setEnvironmentVariable,
       delete: deleteEnvironmentVariable,
     },
+    "/webhooks/github/projects/{projectId}": { post: githubWebhook },
   },
   components: {
     securitySchemes: {

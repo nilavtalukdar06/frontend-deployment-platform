@@ -22,6 +22,8 @@ export type ProjectChanges = Partial<
     | "createdAt"
     | "updatedAt"
     | "deletedAt"
+    | "githubWebhookId"
+    | "githubWebhookSecret"
   >
 >;
 
@@ -56,6 +58,7 @@ export abstract class ProjectRepository {
         .insert(deployments)
         .values({
           projectId: project.id,
+          trigger: "create",
           branch: project.branch,
           framework: project.framework,
           rootDirectory: project.rootDirectory,
@@ -100,6 +103,32 @@ export abstract class ProjectRepository {
         ),
       )
       .limit(1);
+
+    return project;
+  }
+
+  static async findActiveById(id: string): Promise<Project | undefined> {
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
+      .limit(1);
+
+    return project;
+  }
+
+  static async setWebhook(
+    id: string,
+    webhook: { githubWebhookId: number; githubWebhookSecret: string } | null,
+  ): Promise<Project | undefined> {
+    const [project] = await db
+      .update(projects)
+      .set({
+        githubWebhookId: webhook?.githubWebhookId ?? null,
+        githubWebhookSecret: webhook?.githubWebhookSecret ?? null,
+      })
+      .where(and(eq(projects.id, id), isNull(projects.deletedAt)))
+      .returning();
 
     return project;
   }

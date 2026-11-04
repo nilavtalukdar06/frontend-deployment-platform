@@ -212,6 +212,10 @@ export abstract class ProjectValidator {
     params: projectId,
   };
 
+  static readonly enableAutoDeploy = {
+    params: projectId,
+  };
+
   static readonly listDeployments = {
     params: projectId,
     query: z.object({

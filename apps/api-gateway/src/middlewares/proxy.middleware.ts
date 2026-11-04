@@ -26,12 +26,16 @@ const BODY_TOO_LARGE_CODE = "E_BODY_TOO_LARGE";
 const TIMEOUT_ERROR_CODES = new Set(["ETIMEDOUT", "ESOCKETTIMEDOUT"]);
 const UNREACHABLE_ERROR_CODES = new Set(["ECONNREFUSED", "ENOTFOUND"]);
 
-const toProxyError = (err: Error, service: UpstreamService): ApiError => {
+const toProxyError = (
+  err: Error,
+  service: UpstreamService,
+  maxBodyBytes: number,
+): ApiError => {
   const code = (err as NodeJS.ErrnoException).code ?? "";
   const details = { service: service.name };
 
   if (code === BODY_TOO_LARGE_CODE) {
-    return payloadTooLargeError();
+    return payloadTooLargeError(maxBodyBytes);
   }
 
   if (TIMEOUT_ERROR_CODES.has(code)) {
@@ -64,9 +68,14 @@ const isServerResponse = (
   res: ServerResponse | Socket,
 ): res is ServerResponse => "setHeader" in res;
 
+export interface ServiceProxyOptions {
+  maxBodyBytes?: number;
+}
+
 export const createServiceProxy = (
   service: UpstreamService,
   pathFilter: string,
+  { maxBodyBytes = env.MAX_REQUEST_BODY_BYTES }: ServiceProxyOptions = {},
 ): RequestHandler =>
   createProxyMiddleware<TrackedRequest, ServerResponse>({
     target: service.url,
@@ -89,7 +98,7 @@ export const createServiceProxy = (
           req.on("data", (chunk: Buffer) => {
             receivedBytes += chunk.length;
 
-            if (receivedBytes > env.MAX_REQUEST_BODY_BYTES) {
+            if (receivedBytes > maxBodyBytes) {
               proxyReq.destroy(
                 Object.assign(new Error("request body too large"), {
                   code: BODY_TOO_LARGE_CODE,
@@ -119,7 +128,7 @@ export const createServiceProxy = (
         }
       },
       error: (err, req, res) => {
-        const apiError = toProxyError(err, service);
+        const apiError = toProxyError(err, service, maxBodyBytes);
 
         (req.log ?? logger)[apiError.statusCode >= 500 ? "error" : "warn"](
           { err, service: service.name, statusCode: apiError.statusCode },

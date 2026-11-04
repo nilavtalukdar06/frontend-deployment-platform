@@ -133,6 +133,7 @@ export const runDeploymentPipeline = async (params: {
     const commitSha = await CloneService.clone({
       repositoryUrl: project.repositoryUrl,
       branch: deployment.branch,
+      commitSha: deployment.commitSha,
       token,
       destination: workspace,
     });

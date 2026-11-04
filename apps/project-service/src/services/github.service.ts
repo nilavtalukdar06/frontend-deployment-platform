@@ -2,6 +2,7 @@ import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
 import {
   GITHUB_API_URL,
+  GITHUB_JSON,
   githubFetch,
   githubUnavailableError,
 } from "../lib/github";
@@ -48,6 +49,25 @@ const repositorySchema = z.object({
 });
 
 type RepositoryResponse = z.infer<typeof repositorySchema>;
+
+export interface PushWebhookConfig {
+  url: string;
+  secret: string;
+}
+
+const webhookSchema = z.object({
+  id: z.number().int().positive(),
+  config: z.object({ url: z.string().optional() }).optional(),
+});
+
+const repositoryPath = (ref: GithubRepositoryRef): string =>
+  `${GITHUB_API_URL}/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.name)}`;
+
+const pushWebhookBody = ({ url, secret }: PushWebhookConfig) => ({
+  active: true,
+  events: ["push"],
+  config: { url, secret, content_type: "json", insecure_ssl: "0" },
+});
 
 export abstract class GithubService {
   static async listPushableRepositories(
@@ -111,6 +131,147 @@ export abstract class GithubService {
     const repository = GithubService.toRepository(parsed.data);
 
     return GithubService.isImportable(repository) ? repository : undefined;
+  }
+
+  static async createPushWebhook(
+    accessToken: string,
+    ref: GithubRepositoryRef,
+    config: PushWebhookConfig,
+  ): Promise<number | undefined> {
+    const response = await githubFetch(
+      `${repositoryPath(ref)}/hooks`,
+      accessToken,
+      GITHUB_JSON,
+      { method: "POST", body: { name: "web", ...pushWebhookBody(config) } },
+    );
+
+    if (GithubService.isPermissionDenied(response)) {
+      await response.body?.cancel();
+      return undefined;
+    }
+
+    if (response.status === StatusCodes.UNPROCESSABLE_ENTITY) {
+      await response.body?.cancel();
+      return GithubService.updateExistingPushWebhook(accessToken, ref, config);
+    }
+
+    GithubService.assertOk(response, "github webhook creation failed");
+
+    return GithubService.parseWebhook(await response.json()).id;
+  }
+
+  static async deleteWebhook(
+    accessToken: string,
+    ref: GithubRepositoryRef,
+    hookId: number,
+  ): Promise<void> {
+    const response = await githubFetch(
+      `${repositoryPath(ref)}/hooks/${hookId}`,
+      accessToken,
+      GITHUB_JSON,
+      { method: "DELETE" },
+    );
+    await response.body?.cancel();
+
+    if (
+      response.status !== StatusCodes.NOT_FOUND &&
+      !GithubService.isPermissionDenied(response)
+    ) {
+      GithubService.assertOk(response, "github webhook deletion failed");
+    }
+  }
+
+  static async isCollaborator(
+    accessToken: string,
+    ref: GithubRepositoryRef,
+    login: string,
+  ): Promise<boolean> {
+    const response = await githubFetch(
+      `${repositoryPath(ref)}/collaborators/${encodeURIComponent(login)}`,
+      accessToken,
+    );
+    await response.body?.cancel();
+
+    if (response.status === StatusCodes.NO_CONTENT) {
+      return true;
+    }
+
+    if (
+      response.status === StatusCodes.NOT_FOUND ||
+      GithubService.isPermissionDenied(response)
+    ) {
+      return false;
+    }
+
+    GithubService.assertOk(response, "github collaborator lookup failed");
+
+    return false;
+  }
+
+  private static async updateExistingPushWebhook(
+    accessToken: string,
+    ref: GithubRepositoryRef,
+    config: PushWebhookConfig,
+  ): Promise<number | undefined> {
+    const listUrl = new URL(`${repositoryPath(ref)}/hooks`);
+    listUrl.search = new URLSearchParams({ per_page: "100" }).toString();
+
+    const listResponse = await githubFetch(listUrl.toString(), accessToken);
+    GithubService.assertOk(listResponse, "github webhook listing failed");
+
+    const parsed = z.array(webhookSchema).safeParse(await listResponse.json());
+
+    if (!parsed.success) {
+      logger.error({ err: parsed.error }, "unexpected github response shape");
+      throw githubUnavailableError();
+    }
+
+    const existing = parsed.data.find(
+      (hook) => hook.config?.url === config.url,
+    );
+
+    if (!existing) {
+      logger.error(
+        { repository: `${ref.owner}/${ref.name}` },
+        "github rejected the webhook but no matching webhook exists",
+      );
+      throw githubUnavailableError();
+    }
+
+    const updateResponse = await githubFetch(
+      `${repositoryPath(ref)}/hooks/${existing.id}`,
+      accessToken,
+      GITHUB_JSON,
+      { method: "PATCH", body: pushWebhookBody(config) },
+    );
+
+    if (GithubService.isPermissionDenied(updateResponse)) {
+      await updateResponse.body?.cancel();
+      return undefined;
+    }
+
+    GithubService.assertOk(updateResponse, "github webhook update failed");
+
+    return GithubService.parseWebhook(await updateResponse.json()).id;
+  }
+
+  private static parseWebhook(body: unknown): z.infer<typeof webhookSchema> {
+    const parsed = webhookSchema.safeParse(body);
+
+    if (!parsed.success) {
+      logger.error({ err: parsed.error }, "unexpected github response shape");
+      throw githubUnavailableError();
+    }
+
+    return parsed.data;
+  }
+
+  private static isPermissionDenied(response: Response): boolean {
+    return (
+      (response.status === StatusCodes.NOT_FOUND ||
+        response.status === StatusCodes.FORBIDDEN) &&
+      response.headers.get("x-ratelimit-remaining") !== "0"
+    );
   }
 
   private static toRepository(data: RepositoryResponse): GithubRepository & {

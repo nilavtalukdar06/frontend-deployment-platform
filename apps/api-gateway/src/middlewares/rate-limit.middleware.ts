@@ -1,7 +1,9 @@
+import type { Request } from "express";
 import { rateLimit } from "express-rate-limit";
 import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
+import { isWebhookRoute } from "../config/webhook-routes";
 import { redisClient } from "../lib/redis";
 import { ApiError } from "../utils/api-error";
 import { ErrorCode } from "../constants/error-code.enum";
@@ -11,12 +13,19 @@ interface RateLimiterOptions {
   windowMs: number;
   limit: number;
   prefix: string;
+  skip?: (req: Request) => boolean;
 }
 
-const createRateLimiter = ({ windowMs, limit, prefix }: RateLimiterOptions) =>
+const createRateLimiter = ({
+  windowMs,
+  limit,
+  prefix,
+  skip,
+}: RateLimiterOptions) =>
   rateLimit({
     windowMs,
     limit,
+    ...(skip ? { skip } : {}),
     standardHeaders: true,
     legacyHeaders: false,
     passOnStoreError: true,
@@ -40,6 +49,13 @@ export const rateLimiter = createRateLimiter({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   limit: env.RATE_LIMIT_MAX,
   prefix: "gateway-rate-limit:",
+  skip: isWebhookRoute,
+});
+
+export const webhookRateLimiter = createRateLimiter({
+  windowMs: env.WEBHOOK_RATE_LIMIT_WINDOW_MS,
+  limit: env.WEBHOOK_RATE_LIMIT_MAX,
+  prefix: "gateway-webhook-rate-limit:",
 });
 
 export const credentialRateLimiter = createRateLimiter({

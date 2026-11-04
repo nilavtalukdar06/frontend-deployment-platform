@@ -2,6 +2,8 @@ import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
 import { deployments, type Deployment, type Project } from "../db/schema";
 
+export type DeploymentTrigger = Deployment["trigger"];
+
 const errorMessageMaxLength = 1000;
 
 const ACTIVE_DEPLOYMENT_STATUSES = [
@@ -20,44 +22,33 @@ export interface DeploymentPage {
 export abstract class DeploymentRepository {
   static async createForProject(
     project: Project,
-  ): Promise<Deployment | undefined> {
-    return db.transaction(async (tx) => {
-      const [active] = await tx
-        .select({ id: deployments.id })
-        .from(deployments)
-        .where(
-          and(
-            eq(deployments.projectId, project.id),
-            inArray(deployments.status, [...ACTIVE_DEPLOYMENT_STATUSES]),
-          ),
-        )
-        .limit(1);
+    {
+      trigger,
+      commitSha = null,
+    }: { trigger: DeploymentTrigger; commitSha?: string | null },
+  ): Promise<Deployment> {
+    const [deployment] = await db
+      .insert(deployments)
+      .values({
+        projectId: project.id,
+        trigger,
+        commitSha,
+        branch: project.branch,
+        framework: project.framework,
+        rootDirectory: project.rootDirectory,
+        packageManager: project.packageManager,
+        runtime: project.runtime,
+        installCommand: project.installCommand,
+        buildCommand: project.buildCommand,
+        outputDirectory: project.outputDirectory,
+      })
+      .returning();
 
-      if (active) {
-        return undefined;
-      }
+    if (!deployment) {
+      throw new Error("deployment insert returned no rows");
+    }
 
-      const [deployment] = await tx
-        .insert(deployments)
-        .values({
-          projectId: project.id,
-          branch: project.branch,
-          framework: project.framework,
-          rootDirectory: project.rootDirectory,
-          packageManager: project.packageManager,
-          runtime: project.runtime,
-          installCommand: project.installCommand,
-          buildCommand: project.buildCommand,
-          outputDirectory: project.outputDirectory,
-        })
-        .returning();
-
-      if (!deployment) {
-        throw new Error("deployment insert returned no rows");
-      }
-
-      return deployment;
-    });
+    return deployment;
   }
 
   static async listByProject(

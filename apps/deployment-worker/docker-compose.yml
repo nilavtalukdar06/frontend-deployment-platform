@@ -1,0 +1,15 @@
+services:
+  deployment-worker:
+    build:
+      context: ../..
+      dockerfile: apps/deployment-worker/Dockerfile
+    container_name: deployment-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://host.docker.internal:6380}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:4000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

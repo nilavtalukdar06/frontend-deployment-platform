@@ -125,8 +125,26 @@ export abstract class ProjectController {
       .json(
         new ApiResponse(
           StatusCodes.ACCEPTED,
-          SuccessMessage.DEPLOYMENT_STARTED,
+          SuccessMessage.DEPLOYMENT_QUEUED,
           deployment,
+        ),
+      );
+  }
+
+  static async enableAutoDeploy(req: Request, res: Response): Promise<void> {
+    const userId = ProjectController.requireUserId(req);
+    const project = await ProjectService.enableAutoDeploy(
+      userId,
+      req.params["id"] ?? "",
+    );
+
+    res
+      .status(StatusCodes.OK)
+      .json(
+        new ApiResponse(
+          StatusCodes.OK,
+          SuccessMessage.AUTO_DEPLOY_ENABLED,
+          project,
         ),
       );
   }

@@ -45,6 +45,11 @@ projectRouter.post(
   validate(ProjectValidator.redeploy),
   asyncHandler(ProjectController.redeploy),
 );
+projectRouter.post(
+  "/:id/webhook",
+  validate(ProjectValidator.enableAutoDeploy),
+  asyncHandler(ProjectController.enableAutoDeploy),
+);
 projectRouter.get(
   "/:id/deployments",
   validate(ProjectValidator.listDeployments),

@@ -372,12 +372,8 @@
           "name": "deployments_project_id_projects_id_fk",
           "tableFrom": "deployments",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -465,12 +461,8 @@
           "name": "project_environment_variables_project_id_projects_id_fk",
           "tableFrom": "project_environment_variables",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -491,19 +483,12 @@
     "public.package_manager": {
       "name": "package_manager",
       "schema": "public",
-      "values": [
-        "npm",
-        "pnpm",
-        "yarn",
-        "bun"
-      ]
+      "values": ["npm", "pnpm", "yarn", "bun"]
     },
     "public.project_framework": {
       "name": "project_framework",
       "schema": "public",
-      "values": [
-        "vite"
-      ]
+      "values": ["vite"]
     },
     "public.deployment_status": {
       "name": "deployment_status",

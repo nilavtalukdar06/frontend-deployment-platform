@@ -12,6 +12,7 @@ export const rateLimiter = rateLimit({
   limit: env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith("/webhooks/"),
   store: new RedisStore({
     sendCommand: (command: string, ...args: string[]) =>
       redisClient.call(command, ...args) as Promise<RedisReply>,

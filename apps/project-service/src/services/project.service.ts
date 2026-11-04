@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
 import type { Deployment, Project } from "../db/schema";
 import { env } from "../config/env";
@@ -26,8 +26,15 @@ import { FrameworkService } from "./framework.service";
 import { AuthServiceClient } from "../lib/auth-service-client";
 import { mapWithConcurrency } from "../utils/map-with-concurrency";
 import { SecretCipher } from "../utils/secret-cipher";
+import { logger } from "../lib/logger";
+import { DeploymentLockService } from "./deployment-lock.service";
+import { DeploymentQueueService } from "./deployment-queue.service";
 import { DeploymentRunnerService } from "./deployment-runner.service";
-import { GithubService, type GithubRepository } from "./github.service";
+import {
+  GithubService,
+  type GithubRepository,
+  type GithubRepositoryRef,
+} from "./github.service";
 
 export interface PublicProject {
   id: string;
@@ -46,6 +53,7 @@ export interface PublicProject {
   installCommand: string;
   buildCommand: string;
   outputDirectory: string;
+  autoDeploy: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +62,7 @@ export interface PublicDeployment {
   id: string;
   projectId: string;
   status: Deployment["status"];
+  trigger: Deployment["trigger"];
   branch: string;
   commitSha: string | null;
   framework: Project["framework"];
@@ -131,8 +140,16 @@ const MAX_SLUG_ATTEMPTS = 10;
 const DEFAULT_ROOT_DIRECTORY = ".";
 const SITES_BASE_URL = new URL(env.SITES_BASE_URL);
 
+const WEBHOOK_SECRET_BYTES = 32;
+
 const siteUrlFor = (slug: string): string =>
   `${SITES_BASE_URL.protocol}//${slug}.${SITES_BASE_URL.host}`;
+
+const webhookUrlFor = (projectId: string): string =>
+  new URL(
+    `/webhooks/github/projects/${projectId}`,
+    env.PUBLIC_API_URL,
+  ).toString();
 
 export abstract class ProjectService {
   static toPublicProject(project: Project): PublicProject {
@@ -153,6 +170,7 @@ export abstract class ProjectService {
       installCommand: project.installCommand,
       buildCommand: project.buildCommand,
       outputDirectory: project.outputDirectory,
+      autoDeploy: project.githubWebhookId !== null,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -163,6 +181,7 @@ export abstract class ProjectService {
       id: deployment.id,
       projectId: deployment.projectId,
       status: deployment.status,
+      trigger: deployment.trigger,
       branch: deployment.branch,
       commitSha: deployment.commitSha,
       framework: deployment.framework,
@@ -280,13 +299,18 @@ export abstract class ProjectService {
           encryptedEnvironmentVariables,
         );
 
-        await DeploymentRunnerService.start({
+        const withWebhook = await ProjectService.installWebhookSafely(
+          project,
+          accessToken,
+          repository.ref,
+        );
+
+        await DeploymentQueueService.enqueue({
           deploymentId: deployment.id,
           userId,
-          githubToken: accessToken,
         });
 
-        return ProjectService.toPublicProject(project);
+        return ProjectService.toPublicProject(withWebhook);
       } catch (err) {
         if (
           ProjectService.uniqueViolationConstraint(err) === SLUG_UNIQUE_INDEX
@@ -390,38 +414,64 @@ export abstract class ProjectService {
   }
 
   static async remove(userId: string, id: string): Promise<void> {
+    const project = await ProjectService.requireOwnedProject(userId, id);
     const deleted = await ProjectRepository.softDelete(id, userId);
 
     if (!deleted) {
       throw ProjectService.projectNotFound();
     }
+
+    if (project.githubWebhookId !== null) {
+      await ProjectService.removeWebhookSafely(
+        project,
+        project.githubWebhookId,
+      );
+    }
   }
 
   static async redeploy(userId: string, id: string): Promise<PublicDeployment> {
-    const project = await ProjectRepository.findById(id, userId);
+    const project = await ProjectService.requireOwnedProject(userId, id);
 
-    if (!project) {
-      throw ProjectService.projectNotFound();
-    }
+    await AuthServiceClient.getGithubToken(userId);
 
-    const accessToken = await AuthServiceClient.getGithubToken(userId);
-    const deployment = await DeploymentRepository.createForProject(project);
+    const deployment = await DeploymentRepository.createForProject(project, {
+      trigger: "manual",
+    });
 
-    if (!deployment) {
-      throw new ApiError(
-        StatusCodes.CONFLICT,
-        ErrorMessage.DEPLOYMENT_IN_PROGRESS,
-        ErrorCode.DEPLOYMENT_IN_PROGRESS,
-      );
-    }
-
-    await DeploymentRunnerService.start({
+    await DeploymentQueueService.enqueue({
       deploymentId: deployment.id,
       userId,
-      githubToken: accessToken,
     });
 
     return ProjectService.toPublicDeployment(deployment);
+  }
+
+  static async enableAutoDeploy(
+    userId: string,
+    id: string,
+  ): Promise<PublicProject> {
+    const project = await ProjectService.requireOwnedProject(userId, id);
+    const accessToken = await AuthServiceClient.getGithubToken(userId);
+    const repository = await ProjectService.requireRepository(
+      accessToken,
+      project.githubRepositoryId,
+    );
+
+    const updated = await ProjectService.installWebhook(
+      project,
+      accessToken,
+      repository.ref,
+    );
+
+    if (!updated) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        ErrorMessage.WEBHOOK_PERMISSION_DENIED,
+        ErrorCode.WEBHOOK_PERMISSION_DENIED,
+      );
+    }
+
+    return ProjectService.toPublicProject(updated);
   }
 
   static async listDeployments(
@@ -489,7 +539,17 @@ export abstract class ProjectService {
       );
     }
 
-    await DeploymentRunnerService.stop(deploymentId);
+    await Promise.all([
+      DeploymentQueueService.remove(deploymentId),
+      DeploymentRunnerService.stop(deploymentId),
+    ]);
+    await DeploymentLockService.release(userId, deploymentId).catch(
+      (err: unknown) =>
+        logger.error(
+          { err, deploymentId },
+          "failed to release user deployment lock",
+        ),
+    );
 
     return ProjectService.toPublicDeployment(canceled);
   }
@@ -567,6 +627,89 @@ export abstract class ProjectService {
       ErrorCode.RUNTIME_COMMAND_MISMATCH,
       { runtime },
     );
+  }
+
+  private static async installWebhook(
+    project: Project,
+    accessToken: string,
+    ref: GithubRepositoryRef,
+  ): Promise<Project | undefined> {
+    if (project.githubWebhookId !== null) {
+      await GithubService.deleteWebhook(
+        accessToken,
+        ref,
+        project.githubWebhookId,
+      );
+    }
+
+    const secret = randomBytes(WEBHOOK_SECRET_BYTES).toString("hex");
+    const hookId = await GithubService.createPushWebhook(accessToken, ref, {
+      url: webhookUrlFor(project.id),
+      secret,
+    });
+
+    if (hookId === undefined) {
+      await ProjectRepository.setWebhook(project.id, null);
+      return undefined;
+    }
+
+    const updated = await ProjectRepository.setWebhook(project.id, {
+      githubWebhookId: hookId,
+      githubWebhookSecret: SecretCipher.encrypt(secret),
+    });
+
+    if (!updated) {
+      throw ProjectService.projectNotFound();
+    }
+
+    return updated;
+  }
+
+  private static async installWebhookSafely(
+    project: Project,
+    accessToken: string,
+    ref: GithubRepositoryRef,
+  ): Promise<Project> {
+    try {
+      const updated = await ProjectService.installWebhook(
+        project,
+        accessToken,
+        ref,
+      );
+
+      if (!updated) {
+        logger.warn(
+          { projectId: project.id },
+          "webhook not installed, user lacks admin access to the repository",
+        );
+      }
+
+      return updated ?? project;
+    } catch (err) {
+      logger.error({ err, projectId: project.id }, "webhook install failed");
+      return project;
+    }
+  }
+
+  private static async removeWebhookSafely(
+    project: Project,
+    hookId: number,
+  ): Promise<void> {
+    try {
+      const accessToken = await AuthServiceClient.getGithubToken(
+        project.userId,
+      );
+      const repository = await GithubService.getRepository(
+        accessToken,
+        project.githubRepositoryId,
+      );
+
+      if (repository) {
+        await GithubService.deleteWebhook(accessToken, repository.ref, hookId);
+      }
+    } catch (err) {
+      logger.warn({ err, projectId: project.id }, "webhook removal failed");
+    }
   }
 
   private static async requireOwnedProject(

@@ -1,13 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
-const commaSeparatedList = z.string().transform((value) =>
-  value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0),
-);
-
 export const env = createEnv({
   server: {
     NODE_ENV: z
@@ -33,11 +26,6 @@ export const env = createEnv({
     AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
     ECS_CLUSTER: z.string().min(1),
-    ECS_TASK_DEFINITION: z.string().min(1),
-    ECS_CONTAINER_NAME: z.string().min(1).default("deployment-service"),
-    ECS_SUBNET_IDS: commaSeparatedList.pipe(z.array(z.string()).min(1)),
-    ECS_SECURITY_GROUP_IDS: commaSeparatedList.default([]),
-    ECS_ASSIGN_PUBLIC_IP: z.enum(["ENABLED", "DISABLED"]).default("ENABLED"),
 
     SITES_BASE_URL: z
       .string()
@@ -48,6 +36,19 @@ export const env = createEnv({
       .default("http://localhost:8080"),
 
     GITHUB_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
+
+    PUBLIC_API_URL: z
+      .string()
+      .url()
+      .refine((value) => new URL(value).pathname === "/", {
+        message: "must be an origin without a path",
+      })
+      .default("http://localhost:3000"),
+    WEBHOOK_MAX_BODY_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5 * 1024 * 1024),
 
     CORS_ORIGIN: z.string().default("*"),
 

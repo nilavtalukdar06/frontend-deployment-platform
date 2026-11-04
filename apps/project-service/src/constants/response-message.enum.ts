@@ -9,7 +9,7 @@ export enum SuccessMessage {
   PROJECT_RETRIEVED = "Project retrieved successfully",
   PROJECT_UPDATED = "Project updated successfully",
   PROJECT_DELETED = "Project deleted successfully",
-  DEPLOYMENT_STARTED = "Deployment started successfully",
+  DEPLOYMENT_QUEUED = "Deployment queued successfully",
   DEPLOYMENTS_RETRIEVED = "Deployments retrieved successfully",
   DEPLOYMENT_RETRIEVED = "Deployment retrieved successfully",
   DEPLOYMENT_CANCELED = "Deployment canceled successfully",
@@ -17,6 +17,10 @@ export enum SuccessMessage {
   ENVIRONMENT_VARIABLES_RETRIEVED = "Environment variables retrieved successfully",
   ENVIRONMENT_VARIABLE_SAVED = "Environment variable saved successfully",
   ENVIRONMENT_VARIABLE_DELETED = "Environment variable deleted successfully",
+  AUTO_DEPLOY_ENABLED = "Automatic deployments enabled successfully",
+  WEBHOOK_PONG = "Webhook received",
+  WEBHOOK_IGNORED = "Webhook event ignored",
+  WEBHOOK_DEPLOYMENT_QUEUED = "Deployment queued for the pushed commit",
 }
 
 export enum ErrorMessage {
@@ -28,7 +32,6 @@ export enum ErrorMessage {
   CONFLICT = "The request could not be completed due to a conflict",
   INVALID_REPOSITORY = "The repository does not exist or you do not have push access to it",
   REPOSITORY_ALREADY_IMPORTED = "This repository has already been imported as a project",
-  DEPLOYMENT_IN_PROGRESS = "A deployment for this project is already in progress",
   DEPLOYMENT_NOT_FOUND = "The requested deployment could not be found",
   DEPLOYMENT_NOT_CANCELABLE = "Only a deployment that is still in progress can be canceled",
   GITHUB_AUTH_REQUIRED = "GitHub authorization is missing or was revoked, please sign in with GitHub again",
@@ -36,6 +39,9 @@ export enum ErrorMessage {
   UNSUPPORTED_FRAMEWORK = "Only Vite projects are supported",
   PACKAGE_MANAGER_COMMAND_MISMATCH = "The install command must be run with the project's package manager",
   RUNTIME_COMMAND_MISMATCH = "The build command must run on the project's runtime",
+  WEBHOOK_PERMISSION_DENIED = "Automatic deployments require admin access to the repository to install a webhook",
+  INVALID_WEBHOOK_SIGNATURE = "The webhook signature is missing or invalid",
+  INVALID_WEBHOOK_PAYLOAD = "The webhook payload could not be understood",
   GITHUB_UNAVAILABLE = "The repository could not be verified with GitHub, please try again later",
   PROJECT_NOT_FOUND = "The requested project could not be found",
   ENVIRONMENT_VARIABLE_NOT_FOUND = "The requested environment variable could not be found",

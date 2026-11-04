@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { logger } from "./lib/logger";
 import { pgPool } from "./lib/postgres";
+import { closeDeploymentQueue } from "./lib/deployment-queue";
 import { redisClient } from "./lib/redis";
 
 let server: Server;
@@ -42,7 +43,11 @@ const shutdown = (signal: string): void => {
     logger.info("http server closed");
 
     try {
-      await Promise.all([pgPool.end(), redisClient.quit()]);
+      await Promise.all([
+        pgPool.end(),
+        redisClient.quit(),
+        closeDeploymentQueue(),
+      ]);
       logger.info("postgres and redis connections closed");
       clearTimeout(forceExitTimer);
       process.exit(0);
