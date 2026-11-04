@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { env } from "../config/env";
 import type { DeploymentStep } from "../constants/deployment-step.enum";
-import type { Logger } from "pino";
+import type { DeploymentLogCollector } from "../logging/deployment-log-collector";
 import { DeploymentError } from "../utils/deployment-error";
 
 const outputTailLines = 20;
@@ -21,9 +21,9 @@ export abstract class BuildService {
     command: string;
     cwd: string;
     environmentVariables: Record<string, string>;
-    logger: Logger;
+    collector: DeploymentLogCollector;
   }): Promise<void> {
-    const { step, command, cwd, environmentVariables, logger } = params;
+    const { step, command, cwd, environmentVariables, collector } = params;
     const tail: string[] = [];
 
     return new Promise((resolve, reject) => {
@@ -36,17 +36,30 @@ export abstract class BuildService {
         killSignal: "SIGKILL",
       });
 
-      const collect = (stream: NodeJS.ReadableStream, level: "info" | "warn") =>
-        createInterface({ input: stream }).on("line", (line) => {
-          logger[level]({ step }, line);
-          tail.push(line);
-          if (tail.length > outputTailLines) {
-            tail.shift();
-          }
-        });
+      collector.log("info", step, `$ ${command}`);
 
-      collect(child.stdout, "info");
-      collect(child.stderr, "warn");
+      const collect = (
+        stream: NodeJS.ReadableStream,
+        source: "stdout" | "stderr",
+      ) =>
+        createInterface({ input: stream, crlfDelay: Infinity }).on(
+          "line",
+          (line) => {
+            collector.log(
+              source === "stdout" ? "info" : "warn",
+              step,
+              line,
+              source,
+            );
+            tail.push(line);
+            if (tail.length > outputTailLines) {
+              tail.shift();
+            }
+          },
+        );
+
+      collect(child.stdout, "stdout");
+      collect(child.stderr, "stderr");
 
       child.once("error", (err) => {
         const reason =

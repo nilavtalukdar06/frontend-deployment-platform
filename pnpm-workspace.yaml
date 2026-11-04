@@ -3,6 +3,7 @@ packages:
   - "packages/*"
 allowBuilds:
   '@scarf/scarf': false
+  '@confluentinc/kafka-javascript': true
   bufferutil: false
   esbuild: true
   msgpackr-extract: false

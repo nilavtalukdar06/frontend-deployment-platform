@@ -45,6 +45,8 @@ RUN chown ubuntu:ubuntu /app
 COPY --from=build --chown=ubuntu:ubuntu /prod/deployment-service/dist ./dist
 COPY --from=build --chown=ubuntu:ubuntu /prod/deployment-service/node_modules ./node_modules
 COPY --from=build --chown=ubuntu:ubuntu /prod/deployment-service/package.json ./package.json
+COPY --chown=ubuntu:ubuntu apps/deployment-service/ca.pem ./ca.pem
+ENV KAFKA_CA_CERT_PATH=/app/ca.pem
 
 USER ubuntu
 

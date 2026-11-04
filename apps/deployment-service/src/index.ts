@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { env } from "./config/env";
+import { connectProducer, disconnectProducer } from "./lib/kafka";
 import { logger } from "./lib/logger";
+import { DeploymentLogCollector } from "./logging/deployment-log-collector";
 import { closePostgres } from "./lib/postgres";
 import { runDeploymentPipeline } from "./pipeline/deployment.pipeline";
 import { DeploymentRepository } from "./repositories/deployment.repository";
@@ -8,6 +10,9 @@ import { DeploymentLockService } from "./services/deployment-lock.service";
 
 let exiting = false;
 let lockOwner: { userId: string; deploymentId: string } | undefined;
+let collector: DeploymentLogCollector | undefined;
+
+const logShutdownTimeoutMs = 10_000;
 
 const exit = async (code: number): Promise<never> => {
   if (!exiting) {
@@ -20,6 +25,11 @@ const exit = async (code: number): Promise<never> => {
       );
     }
 
+    if (collector) {
+      await collector.close(logShutdownTimeoutMs);
+    }
+    await disconnectProducer(logShutdownTimeoutMs);
+
     await closePostgres();
     logger.flush();
   }
@@ -28,6 +38,7 @@ const exit = async (code: number): Promise<never> => {
 
 const abort = async (deploymentId: string, reason: string): Promise<never> => {
   logger.error({ deploymentId, reason }, "deployment aborted");
+  collector?.status("failed", reason);
   await DeploymentRepository.markFailed(deploymentId, reason).catch(
     (err: unknown) =>
       logger.error({ err }, "failed to mark deployment as failed"),
@@ -67,11 +78,26 @@ const main = async (): Promise<never> => {
     void abort(deploymentId, "unexpected error during deployment");
   });
 
+  const producer = await connectProducer().catch((err: unknown) => {
+    logger.warn(
+      { err },
+      "kafka is unavailable, deployment logs will only be written locally",
+    );
+    return undefined;
+  });
+
+  collector = new DeploymentLogCollector({
+    deploymentId,
+    producer,
+    logger: logger.child({ deploymentId }),
+  });
+
   try {
     const result = await runDeploymentPipeline({
       deploymentId,
       userId,
       encryptedGithubToken,
+      collector,
     });
     logger.info({ deploymentId, result }, "deployment pipeline finished");
     return exit(0);

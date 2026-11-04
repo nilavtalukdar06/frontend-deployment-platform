@@ -1,6 +1,13 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+const commaSeparatedList = z.string().transform((value) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0),
+);
+
 export const env = createEnv({
   server: {
     NODE_ENV: z
@@ -32,6 +39,33 @@ export const env = createEnv({
       .positive()
       .default(15 * 60 * 1000),
     UPLOAD_CONCURRENCY: z.coerce.number().int().positive().default(8),
+
+    KAFKA_BROKERS: commaSeparatedList.pipe(z.array(z.string()).min(1)),
+    KAFKA_USERNAME: z.string().min(1),
+    KAFKA_PASSWORD: z.string().min(1),
+    KAFKA_SASL_MECHANISM: z
+      .enum(["scram-sha-256", "scram-sha-512", "plain"])
+      .default("scram-sha-256"),
+    KAFKA_CA_CERT_PATH: z.string().min(1).default("ca.pem"),
+    KAFKA_CLIENT_ID: z.string().min(1).default("deployment-service"),
+    KAFKA_DEPLOYMENT_LOGS_TOPIC: z.string().min(1),
+
+    DEPLOYMENT_LOG_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+    DEPLOYMENT_LOG_FLUSH_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(250),
+    DEPLOYMENT_LOG_BUFFER_LIMIT: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(20_000),
+    DEPLOYMENT_LOG_MAX_LINE_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(8192),
 
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

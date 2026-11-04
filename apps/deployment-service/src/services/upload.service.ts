@@ -7,6 +7,7 @@ import type { Logger } from "pino";
 import { env } from "../config/env";
 import { DeploymentStep } from "../constants/deployment-step.enum";
 import { s3 } from "../lib/s3";
+import type { DeploymentLogCollector } from "../logging/deployment-log-collector";
 import { DeploymentError } from "../utils/deployment-error";
 import { mapWithConcurrency } from "../utils/map-with-concurrency";
 
@@ -18,8 +19,9 @@ export abstract class UploadService {
     deploymentId: string;
     directory: string;
     logger: Logger;
+    collector: DeploymentLogCollector;
   }): Promise<number> {
-    const { deploymentId, directory, logger } = params;
+    const { deploymentId, directory, logger, collector } = params;
 
     const files = await globby("**/*", {
       cwd: directory,
@@ -40,6 +42,15 @@ export abstract class UploadService {
         "build output directory is empty or does not exist",
       );
     }
+
+    const progressInterval = Math.max(Math.ceil(files.length / 10), 1);
+    let uploadedCount = 0;
+
+    collector.log(
+      "info",
+      DeploymentStep.UPLOAD,
+      `uploading ${files.length} files`,
+    );
 
     await mapWithConcurrency(files, env.UPLOAD_CONCURRENCY, async (file) => {
       const filePath = file.split(path.sep).join("/");
@@ -64,6 +75,18 @@ export abstract class UploadService {
       }
 
       logger.debug({ key }, "uploaded file");
+
+      uploadedCount += 1;
+      if (
+        uploadedCount % progressInterval === 0 ||
+        uploadedCount === files.length
+      ) {
+        collector.log(
+          "info",
+          DeploymentStep.UPLOAD,
+          `uploaded ${uploadedCount}/${files.length} files`,
+        );
+      }
     });
 
     return files.length;

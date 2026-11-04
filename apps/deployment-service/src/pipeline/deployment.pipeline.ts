@@ -3,6 +3,7 @@ import path from "node:path";
 import { env } from "../config/env";
 import { DeploymentStep } from "../constants/deployment-step.enum";
 import { logger as rootLogger } from "../lib/logger";
+import type { DeploymentLogCollector } from "../logging/deployment-log-collector";
 import {
   DeploymentRepository,
   type DeploymentStatus,
@@ -46,7 +47,13 @@ const decryptGithubToken = (encryptedGithubToken: string): string => {
   }
 };
 
+const failureMessageOf = (err: unknown): string =>
+  err instanceof DeploymentError
+    ? `[${err.step}] ${err.message}`
+    : "unexpected error during deployment";
+
 const advance = async (
+  collector: DeploymentLogCollector,
   deploymentId: string,
   status: DeploymentStatus,
   step: DeploymentStep,
@@ -64,131 +71,232 @@ const advance = async (
       "deployment was finalized by another process",
     );
   }
+
+  collector.status(status);
+};
+
+const runStep = async <T>(
+  collector: DeploymentLogCollector,
+  step: DeploymentStep,
+  task: () => Promise<T>,
+): Promise<T> => {
+  collector.stepStarted(step);
+
+  try {
+    const result = await task();
+    collector.stepCompleted(step);
+    return result;
+  } catch (err) {
+    collector.stepFailed(
+      step,
+      err instanceof DeploymentError
+        ? err.message
+        : "unexpected error during deployment",
+    );
+    throw err;
+  }
 };
 
 export const runDeploymentPipeline = async (params: {
   deploymentId: string;
   userId: string;
   encryptedGithubToken: string;
+  collector: DeploymentLogCollector;
 }): Promise<PipelineResult> => {
-  const { deploymentId, userId, encryptedGithubToken } = params;
+  const { deploymentId, userId, encryptedGithubToken, collector } = params;
   const logger = rootLogger.child({ deploymentId });
   const workspace = path.resolve(env.OUTPUT_DIR, deploymentId);
 
   try {
-    const record = await DeploymentRepository.findWithProject(deploymentId);
+    const initialized = await runStep(
+      collector,
+      DeploymentStep.INITIALIZE,
+      async () => {
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "preparing deployment",
+        );
 
-    if (!record) {
-      throw new DeploymentError(
-        DeploymentStep.INITIALIZE,
-        "deployment does not exist",
-      );
-    }
+        const record = await DeploymentRepository.findWithProject(deploymentId);
 
-    const { deployment, project } = record;
+        if (!record) {
+          throw new DeploymentError(
+            DeploymentStep.INITIALIZE,
+            "deployment does not exist",
+          );
+        }
 
-    if (deployment.status !== "queued") {
-      logger.warn(
-        { status: deployment.status },
-        "deployment is not queued, skipping",
-      );
+        const { deployment, project } = record;
+
+        if (deployment.status !== "queued") {
+          collector.log(
+            "warn",
+            DeploymentStep.INITIALIZE,
+            `deployment is ${deployment.status}, skipping`,
+          );
+          collector.status(deployment.status);
+          return undefined;
+        }
+
+        if (project.userId !== userId) {
+          throw new DeploymentError(
+            DeploymentStep.INITIALIZE,
+            "deployment does not belong to this user",
+          );
+        }
+
+        if (project.deletedAt) {
+          throw new DeploymentError(
+            DeploymentStep.INITIALIZE,
+            "project has been deleted",
+          );
+        }
+
+        const projectDir = resolveInside(workspace, deployment.rootDirectory);
+        const outputDir = projectDir
+          ? resolveInside(projectDir, deployment.outputDirectory)
+          : undefined;
+
+        if (!projectDir || !outputDir) {
+          throw new DeploymentError(
+            DeploymentStep.INITIALIZE,
+            "root or output directory points outside the repository",
+          );
+        }
+
+        const token = decryptGithubToken(encryptedGithubToken);
+        collector.setContext({ projectId: project.id, secrets: [token] });
+
+        const environmentVariables = await loadEnvironmentVariables(project.id);
+        collector.setContext({
+          projectId: project.id,
+          secrets: [token, ...Object.values(environmentVariables)],
+        });
+
+        const variableCount = Object.keys(environmentVariables).length;
+        logger.info(
+          { keys: Object.keys(environmentVariables) },
+          "environment variables loaded",
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `loaded ${variableCount} environment variable${variableCount === 1 ? "" : "s"}`,
+        );
+
+        return {
+          deployment,
+          project,
+          projectDir,
+          outputDir,
+          token,
+          environmentVariables,
+        };
+      },
+    );
+
+    if (!initialized) {
       return "skipped";
     }
 
-    if (project.userId !== userId) {
-      throw new DeploymentError(
-        DeploymentStep.INITIALIZE,
-        "deployment does not belong to this user",
-      );
-    }
-
-    if (project.deletedAt) {
-      throw new DeploymentError(
-        DeploymentStep.INITIALIZE,
-        "project has been deleted",
-      );
-    }
-
-    const projectDir = resolveInside(workspace, deployment.rootDirectory);
-    const outputDir = projectDir
-      ? resolveInside(projectDir, deployment.outputDirectory)
-      : undefined;
-
-    if (!projectDir || !outputDir) {
-      throw new DeploymentError(
-        DeploymentStep.INITIALIZE,
-        "root or output directory points outside the repository",
-      );
-    }
-
-    const token = decryptGithubToken(encryptedGithubToken);
-    const environmentVariables = await loadEnvironmentVariables(project.id);
-    logger.info(
-      { keys: Object.keys(environmentVariables) },
-      "environment variables loaded",
-    );
-
-    logger.info({ step: DeploymentStep.CLONE }, "cloning repository");
-    await advance(deploymentId, "cloning", DeploymentStep.CLONE);
-    const commitSha = await CloneService.clone({
-      repositoryUrl: project.repositoryUrl,
-      branch: deployment.branch,
-      commitSha: deployment.commitSha,
+    const {
+      deployment,
+      project,
+      projectDir,
+      outputDir,
       token,
-      destination: workspace,
-    });
-    logger.info({ commitSha }, "repository cloned");
-
-    await advance(deploymentId, "installing", DeploymentStep.INSTALL, {
-      commitSha,
-    });
-    logger.info({ step: DeploymentStep.INSTALL }, "installing dependencies");
-    await BuildService.run({
-      step: DeploymentStep.INSTALL,
-      command: deployment.installCommand,
-      cwd: projectDir,
       environmentVariables,
-      logger,
-    });
+    } = initialized;
 
-    await advance(deploymentId, "building", DeploymentStep.BUILD);
-    logger.info({ step: DeploymentStep.BUILD }, "building project");
-    await BuildService.run({
-      step: DeploymentStep.BUILD,
-      command: deployment.buildCommand,
-      cwd: projectDir,
-      environmentVariables,
-      logger,
-    });
+    await advance(collector, deploymentId, "cloning", DeploymentStep.CLONE);
+    const commitSha = await runStep(
+      collector,
+      DeploymentStep.CLONE,
+      async () => {
+        const target = deployment.commitSha
+          ? `commit ${deployment.commitSha}`
+          : `branch ${deployment.branch}`;
+        collector.log(
+          "info",
+          DeploymentStep.CLONE,
+          `cloning ${project.repositoryUrl} (${target})`,
+        );
 
-    await advance(deploymentId, "uploading", DeploymentStep.UPLOAD);
-    logger.info({ step: DeploymentStep.UPLOAD }, "uploading build output");
-    const uploaded = await UploadService.uploadDirectory({
-      deploymentId,
-      directory: outputDir,
-      logger,
-    });
-    logger.info(
-      { files: uploaded, prefix: outputKeyPrefix(deploymentId) },
-      "build output uploaded",
+        const sha = await CloneService.clone({
+          repositoryUrl: project.repositoryUrl,
+          branch: deployment.branch,
+          commitSha: deployment.commitSha,
+          token,
+          destination: workspace,
+        });
+
+        collector.log("info", DeploymentStep.CLONE, `checked out ${sha}`);
+        return sha;
+      },
     );
 
-    if (!(await DeploymentRepository.markReady(deploymentId))) {
-      throw new DeploymentError(
-        DeploymentStep.FINALIZE,
-        "deployment was finalized by another process",
-      );
-    }
+    await advance(
+      collector,
+      deploymentId,
+      "installing",
+      DeploymentStep.INSTALL,
+      {
+        commitSha,
+      },
+    );
+    await runStep(collector, DeploymentStep.INSTALL, () =>
+      BuildService.run({
+        step: DeploymentStep.INSTALL,
+        command: deployment.installCommand,
+        cwd: projectDir,
+        environmentVariables,
+        collector,
+      }),
+    );
 
-    logger.info("deployment is ready");
+    await advance(collector, deploymentId, "building", DeploymentStep.BUILD);
+    await runStep(collector, DeploymentStep.BUILD, () =>
+      BuildService.run({
+        step: DeploymentStep.BUILD,
+        command: deployment.buildCommand,
+        cwd: projectDir,
+        environmentVariables,
+        collector,
+      }),
+    );
+
+    await advance(collector, deploymentId, "uploading", DeploymentStep.UPLOAD);
+    await runStep(collector, DeploymentStep.UPLOAD, async () => {
+      const uploaded = await UploadService.uploadDirectory({
+        deploymentId,
+        directory: outputDir,
+        logger,
+        collector,
+      });
+      logger.info(
+        { files: uploaded, prefix: outputKeyPrefix(deploymentId) },
+        "build output uploaded",
+      );
+    });
+
+    await runStep(collector, DeploymentStep.FINALIZE, async () => {
+      if (!(await DeploymentRepository.markReady(deploymentId))) {
+        throw new DeploymentError(
+          DeploymentStep.FINALIZE,
+          "deployment was finalized by another process",
+        );
+      }
+    });
+
+    collector.status("ready");
+    collector.log("info", DeploymentStep.FINALIZE, "deployment is ready");
     return "ready";
   } catch (err) {
-    const message =
-      err instanceof DeploymentError
-        ? `[${err.step}] ${err.message}`
-        : "unexpected error during deployment";
+    const message = failureMessageOf(err);
 
     logger.error({ err }, "deployment failed");
+    collector.status("failed", message);
     await DeploymentRepository.markFailed(deploymentId, message).catch(
       (markErr: unknown) =>
         logger.error({ err: markErr }, "failed to mark deployment as failed"),
