@@ -1459,7 +1459,7 @@ const deleteProject: JsonObject = {
   operationId: "deleteProject",
   summary: "Delete a project",
   description:
-    "Protected. Proxied to the project-service `DELETE /projects/{id}`. Soft delete: the project disappears from every endpoint and its name becomes available again. The project's GitHub push webhook, if any, is removed from the repository on a best-effort basis.",
+    "Protected. Proxied to the project-service `DELETE /projects/{id}`. Soft delete of the project together with everything it deployed: the project disappears from every endpoint and its name becomes available again, its queued deployment jobs are removed, the AWS ECS tasks of its in-progress deployments are stopped, and every deployment and its build output in the S3 bucket is deleted. The project's database row stays locked while this happens, so no new deployment task can be started for the project by a concurrent redeploy or push webhook before the request completes. If stopping a task or deleting from S3 fails the request fails with `500` and nothing is deleted, so it can be retried. The project's GitHub push webhook, if any, is removed from the repository on a best-effort basis once the deletion has committed.",
   security: bearerSecurity,
   parameters: [projectIdParameter],
   responses: {

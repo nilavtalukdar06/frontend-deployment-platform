@@ -1,6 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import { deployments, type Deployment } from "../db/schema";
+import { deployments, projects, type Deployment } from "../db/schema";
 
 const errorMessageMaxLength = 1000;
 
@@ -21,6 +21,32 @@ export abstract class DeploymentRepository {
       .limit(1);
 
     return deployment;
+  }
+
+  static async withLaunchLock<T>(
+    deploymentId: string,
+    launch: () => Promise<T>,
+  ): Promise<T | undefined> {
+    return db.transaction(async (tx) => {
+      const [launchable] = await tx
+        .select({ id: deployments.id })
+        .from(deployments)
+        .innerJoin(projects, eq(projects.id, deployments.projectId))
+        .where(
+          and(
+            eq(deployments.id, deploymentId),
+            eq(deployments.status, "queued"),
+            isNull(projects.deletedAt),
+          ),
+        )
+        .for("key share", { of: projects });
+
+      if (!launchable) {
+        return undefined;
+      }
+
+      return launch();
+    });
   }
 
   static isActive(deployment: Pick<Deployment, "status">): boolean {

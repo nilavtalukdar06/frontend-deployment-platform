@@ -433,6 +433,9 @@ importers:
       '@aws-sdk/client-ecs':
         specifier: ^3.1161.0
         version: 3.1161.0
+      '@aws-sdk/client-s3':
+        specifier: ^3.1161.0
+        version: 3.1161.0
       '@neondatabase/serverless':
         specifier: ^1.2.0
         version: 1.2.0

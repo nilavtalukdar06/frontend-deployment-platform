@@ -14,64 +14,29 @@ export interface StartDeploymentInput {
   githubToken: string;
 }
 
+export type StartDeploymentResult = "started" | "skipped" | "failed";
+
 export abstract class DeploymentRunnerService {
-  static async start({
-    deploymentId,
-    userId,
-    githubToken,
-  }: StartDeploymentInput): Promise<boolean> {
+  static async start(
+    input: StartDeploymentInput,
+  ): Promise<StartDeploymentResult> {
+    const { deploymentId } = input;
+
     try {
-      const { tasks, failures } = await ecs.send(
-        new RunTaskCommand({
-          cluster: env.ECS_CLUSTER,
-          taskDefinition: env.ECS_TASK_DEFINITION,
-          launchType: "FARGATE",
-          count: 1,
-          startedBy: deploymentId,
-          clientToken: deploymentId,
-          networkConfiguration: {
-            awsvpcConfiguration: {
-              subnets: env.ECS_SUBNET_IDS,
-              securityGroups:
-                env.ECS_SECURITY_GROUP_IDS.length > 0
-                  ? env.ECS_SECURITY_GROUP_IDS
-                  : undefined,
-              assignPublicIp: env.ECS_ASSIGN_PUBLIC_IP,
-            },
-          },
-          overrides: {
-            containerOverrides: [
-              {
-                name: env.ECS_CONTAINER_NAME,
-                environment: [
-                  { name: "DEPLOYMENT_ID", value: deploymentId },
-                  { name: "USER_ID", value: userId },
-                  {
-                    name: "GITHUB_TOKEN_ENCRYPTED",
-                    value: SecretCipher.encrypt(githubToken),
-                  },
-                ],
-              },
-            ],
-          },
-        }),
+      const started = await DeploymentRepository.withLaunchLock(
+        deploymentId,
+        () => DeploymentRunnerService.runTask(input),
       );
 
-      const taskArn = tasks?.[0]?.taskArn;
-
-      if (!taskArn) {
-        throw new Error(
-          failures
-            ?.map(({ arn, reason, detail }) =>
-              [arn, reason, detail].filter(Boolean).join(" "),
-            )
-            .join("; ") || "ecs did not return a task",
+      if (started === undefined) {
+        logger.info(
+          { deploymentId },
+          "deployment or its project is gone, task not started",
         );
+        return "skipped";
       }
 
-      logger.info({ deploymentId, taskArn }, "deployment task started");
-
-      return true;
+      return "started";
     } catch (err) {
       logger.error({ err, deploymentId }, "deployment task failed to start");
 
@@ -85,7 +50,65 @@ export abstract class DeploymentRunnerService {
         ),
       );
 
-      return false;
+      return "failed";
     }
+  }
+
+  private static async runTask({
+    deploymentId,
+    userId,
+    githubToken,
+  }: StartDeploymentInput): Promise<true> {
+    const { tasks, failures } = await ecs.send(
+      new RunTaskCommand({
+        cluster: env.ECS_CLUSTER,
+        taskDefinition: env.ECS_TASK_DEFINITION,
+        launchType: "FARGATE",
+        count: 1,
+        startedBy: deploymentId,
+        clientToken: deploymentId,
+        networkConfiguration: {
+          awsvpcConfiguration: {
+            subnets: env.ECS_SUBNET_IDS,
+            securityGroups:
+              env.ECS_SECURITY_GROUP_IDS.length > 0
+                ? env.ECS_SECURITY_GROUP_IDS
+                : undefined,
+            assignPublicIp: env.ECS_ASSIGN_PUBLIC_IP,
+          },
+        },
+        overrides: {
+          containerOverrides: [
+            {
+              name: env.ECS_CONTAINER_NAME,
+              environment: [
+                { name: "DEPLOYMENT_ID", value: deploymentId },
+                { name: "USER_ID", value: userId },
+                {
+                  name: "GITHUB_TOKEN_ENCRYPTED",
+                  value: SecretCipher.encrypt(githubToken),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    const taskArn = tasks?.[0]?.taskArn;
+
+    if (!taskArn) {
+      throw new Error(
+        failures
+          ?.map(({ arn, reason, detail }) =>
+            [arn, reason, detail].filter(Boolean).join(" "),
+          )
+          .join("; ") || "ecs did not return a task",
+      );
+    }
+
+    logger.info({ deploymentId, taskArn }, "deployment task started");
+
+    return true;
   }
 }

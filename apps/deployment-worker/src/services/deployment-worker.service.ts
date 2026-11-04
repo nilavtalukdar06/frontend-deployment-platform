@@ -64,18 +64,17 @@ export abstract class DeploymentWorkerService {
       throw err;
     }
 
-    const started = await DeploymentRunnerService.start({
+    const result = await DeploymentRunnerService.start({
       deploymentId,
       userId,
       githubToken,
     });
 
-    if (!started) {
+    if (result !== "started") {
       await DeploymentLockService.release(userId, deploymentId);
-      return "failed";
     }
 
-    return "started";
+    return result;
   }
 
   static async handleFailure(

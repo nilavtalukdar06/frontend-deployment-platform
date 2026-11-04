@@ -151,6 +151,10 @@ export abstract class WebhookService {
       commitSha: payload.after,
     });
 
+    if (!deployment) {
+      return ignored("project was deleted");
+    }
+
     await DeploymentQueueService.enqueue({
       deploymentId: deployment.id,
       userId: project.userId,

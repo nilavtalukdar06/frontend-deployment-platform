@@ -1,6 +1,11 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import { deployments, type Deployment, type Project } from "../db/schema";
+import {
+  deployments,
+  projects,
+  type Deployment,
+  type Project,
+} from "../db/schema";
 
 export type DeploymentTrigger = Deployment["trigger"];
 
@@ -20,35 +25,53 @@ export interface DeploymentPage {
 }
 
 export abstract class DeploymentRepository {
+  static isActive(deployment: Pick<Deployment, "status">): boolean {
+    return (ACTIVE_DEPLOYMENT_STATUSES as readonly string[]).includes(
+      deployment.status,
+    );
+  }
+
   static async createForProject(
     project: Project,
     {
       trigger,
       commitSha = null,
     }: { trigger: DeploymentTrigger; commitSha?: string | null },
-  ): Promise<Deployment> {
-    const [deployment] = await db
-      .insert(deployments)
-      .values({
-        projectId: project.id,
-        trigger,
-        commitSha,
-        branch: project.branch,
-        framework: project.framework,
-        rootDirectory: project.rootDirectory,
-        packageManager: project.packageManager,
-        runtime: project.runtime,
-        installCommand: project.installCommand,
-        buildCommand: project.buildCommand,
-        outputDirectory: project.outputDirectory,
-      })
-      .returning();
+  ): Promise<Deployment | undefined> {
+    return db.transaction(async (tx) => {
+      const [alive] = await tx
+        .select({ id: projects.id })
+        .from(projects)
+        .where(and(eq(projects.id, project.id), isNull(projects.deletedAt)))
+        .for("key share");
 
-    if (!deployment) {
-      throw new Error("deployment insert returned no rows");
-    }
+      if (!alive) {
+        return undefined;
+      }
 
-    return deployment;
+      const [deployment] = await tx
+        .insert(deployments)
+        .values({
+          projectId: project.id,
+          trigger,
+          commitSha,
+          branch: project.branch,
+          framework: project.framework,
+          rootDirectory: project.rootDirectory,
+          packageManager: project.packageManager,
+          runtime: project.runtime,
+          installCommand: project.installCommand,
+          buildCommand: project.buildCommand,
+          outputDirectory: project.outputDirectory,
+        })
+        .returning();
+
+      if (!deployment) {
+        throw new Error("deployment insert returned no rows");
+      }
+
+      return deployment;
+    });
   }
 
   static async listByProject(

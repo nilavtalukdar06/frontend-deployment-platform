@@ -37,6 +37,11 @@ export interface CreatedProject {
   deployment: Deployment;
 }
 
+export interface DeletedProject {
+  project: Project;
+  deployments: Deployment[];
+}
+
 export interface ProjectPage {
   items: Project[];
   total: number;
@@ -196,19 +201,44 @@ export abstract class ProjectRepository {
     return project;
   }
 
-  static async softDelete(id: string, userId: string): Promise<boolean> {
-    const deleted = await db
-      .update(projects)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(projects.id, id),
-          eq(projects.userId, userId),
-          isNull(projects.deletedAt),
-        ),
-      )
-      .returning({ id: projects.id });
+  static async deleteWithCleanup(
+    id: string,
+    userId: string,
+    cleanup: (deployments: Deployment[]) => Promise<void>,
+  ): Promise<DeletedProject | undefined> {
+    return db.transaction(async (tx) => {
+      const [project] = await tx
+        .select()
+        .from(projects)
+        .where(
+          and(
+            eq(projects.id, id),
+            eq(projects.userId, userId),
+            isNull(projects.deletedAt),
+          ),
+        )
+        .limit(1)
+        .for("update");
 
-    return deleted.length > 0;
+      if (!project) {
+        return undefined;
+      }
+
+      const projectDeployments = await tx
+        .select()
+        .from(deployments)
+        .where(eq(deployments.projectId, id));
+
+      await tx
+        .update(projects)
+        .set({ deletedAt: new Date() })
+        .where(eq(projects.id, id));
+
+      await cleanup(projectDeployments);
+
+      await tx.delete(deployments).where(eq(deployments.projectId, id));
+
+      return { project, deployments: projectDeployments };
+    });
   }
 }

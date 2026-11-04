@@ -30,6 +30,7 @@ import { logger } from "../lib/logger";
 import { DeploymentLockService } from "./deployment-lock.service";
 import { DeploymentQueueService } from "./deployment-queue.service";
 import { DeploymentRunnerService } from "./deployment-runner.service";
+import { DeploymentStorageService } from "./deployment-storage.service";
 import {
   GithubService,
   type GithubRepository,
@@ -137,6 +138,7 @@ const REPOSITORY_UNIQUE_INDEX =
   "projects_user_id_github_repository_id_active_unique_idx";
 const DETECTION_CONCURRENCY = 6;
 const MAX_SLUG_ATTEMPTS = 10;
+const PURGE_CONCURRENCY = 8;
 const DEFAULT_ROOT_DIRECTORY = ".";
 const SITES_BASE_URL = new URL(env.SITES_BASE_URL);
 
@@ -414,17 +416,34 @@ export abstract class ProjectService {
   }
 
   static async remove(userId: string, id: string): Promise<void> {
-    const project = await ProjectService.requireOwnedProject(userId, id);
-    const deleted = await ProjectRepository.softDelete(id, userId);
+    const deleted = await ProjectRepository.deleteWithCleanup(
+      id,
+      userId,
+      (deployments) => ProjectService.purgeDeployments(deployments),
+    );
 
     if (!deleted) {
       throw ProjectService.projectNotFound();
     }
 
-    if (project.githubWebhookId !== null) {
+    await Promise.all(
+      deleted.deployments
+        .filter((deployment) => DeploymentRepository.isActive(deployment))
+        .map((deployment) =>
+          DeploymentLockService.release(userId, deployment.id).catch(
+            (err: unknown) =>
+              logger.error(
+                { err, deploymentId: deployment.id },
+                "failed to release user deployment lock",
+              ),
+          ),
+        ),
+    );
+
+    if (deleted.project.githubWebhookId !== null) {
       await ProjectService.removeWebhookSafely(
-        project,
-        project.githubWebhookId,
+        deleted.project,
+        deleted.project.githubWebhookId,
       );
     }
   }
@@ -437,6 +456,10 @@ export abstract class ProjectService {
     const deployment = await DeploymentRepository.createForProject(project, {
       trigger: "manual",
     });
+
+    if (!deployment) {
+      throw ProjectService.projectNotFound();
+    }
 
     await DeploymentQueueService.enqueue({
       deploymentId: deployment.id,
@@ -626,6 +649,24 @@ export abstract class ProjectService {
       ErrorMessage.RUNTIME_COMMAND_MISMATCH,
       ErrorCode.RUNTIME_COMMAND_MISMATCH,
       { runtime },
+    );
+  }
+
+  private static async purgeDeployments(
+    deployments: Deployment[],
+  ): Promise<void> {
+    const active = deployments.filter((deployment) =>
+      DeploymentRepository.isActive(deployment),
+    );
+
+    await Promise.all(
+      active.map((deployment) => DeploymentQueueService.remove(deployment.id)),
+    );
+    await mapWithConcurrency(active, PURGE_CONCURRENCY, (deployment) =>
+      DeploymentRunnerService.stopAndWait(deployment.id),
+    );
+    await mapWithConcurrency(deployments, PURGE_CONCURRENCY, (deployment) =>
+      DeploymentStorageService.deleteOutputs(deployment.id),
     );
   }
 

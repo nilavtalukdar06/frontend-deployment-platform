@@ -27,6 +27,8 @@ export const env = createEnv({
 
     ECS_CLUSTER: z.string().min(1),
 
+    S3_BUCKET_NAME: z.string().min(1),
+
     SITES_BASE_URL: z
       .string()
       .url()
