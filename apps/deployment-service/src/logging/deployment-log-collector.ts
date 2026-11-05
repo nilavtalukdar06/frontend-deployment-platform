@@ -1,7 +1,8 @@
 import type { Logger } from "pino";
 import { env } from "../config/env";
-import type { DeploymentStep } from "../constants/deployment-step.enum";
+import { DeploymentStep } from "../constants/deployment-step.enum";
 import type { KafkaProducer } from "../lib/kafka";
+import { formatDuration } from "../utils/format-duration";
 import type { DeploymentStatus } from "../repositories/deployment.repository";
 import {
   deploymentLogSchemaVersion,
@@ -31,6 +32,27 @@ const retryMaxDelayMs = 5_000;
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+const stepLabels: Record<DeploymentStep, string> = {
+  [DeploymentStep.INITIALIZE]: "Initialize",
+  [DeploymentStep.CLONE]: "Clone",
+  [DeploymentStep.INSTALL]: "Install",
+  [DeploymentStep.BUILD]: "Build",
+  [DeploymentStep.UPLOAD]: "Upload",
+  [DeploymentStep.FINALIZE]: "Finalize",
+};
+
+const statusMessages: Record<DeploymentStatus, string> = {
+  queued: "Deployment is queued",
+  cloning: "Deployment status changed to cloning: fetching your repository",
+  installing:
+    "Deployment status changed to installing: installing dependencies",
+  building: "Deployment status changed to building: building your project",
+  uploading: "Deployment status changed to uploading: publishing build output",
+  ready: "Deployment status changed to ready: your site is live",
+  failed: "Deployment status changed to failed",
+  canceled: "Deployment status changed to canceled",
+};
 
 const isDroppable = (event: DeploymentLogEvent): boolean =>
   event.type === "log" && event.source !== "system";
@@ -116,10 +138,14 @@ export class DeploymentLogCollector {
 
   status(status: DeploymentStatus, error: string | null = null): void {
     this.lastStatus = status;
+    const redactedError = error === null ? null : this.redact(error);
+    const base = statusMessages[status];
+
     this.emit({
       type: "status",
       status,
-      error: error === null ? null : this.redact(error),
+      error: redactedError,
+      message: redactedError === null ? base : `${base}: ${redactedError}`,
     });
   }
 
@@ -139,7 +165,17 @@ export class DeploymentLogCollector {
         ? Date.now() - startedAt
         : null;
 
-    this.emit({ type: "step", step, phase, durationMs, error });
+    const label = stepLabels[step];
+    const elapsed =
+      durationMs === null ? "" : ` in ${formatDuration(durationMs)}`;
+    const message =
+      phase === "started"
+        ? `${label} step started`
+        : phase === "completed"
+          ? `${label} step completed${elapsed}`
+          : `${label} step failed${elapsed}${error ? `: ${error}` : ""}`;
+
+    this.emit({ type: "step", step, phase, durationMs, error, message });
   }
 
   private emit(input: DeploymentLogEventInput): void {
@@ -309,7 +345,17 @@ export class DeploymentLogCollector {
     }
 
     this.reportDroppedLines();
-    this.emit({ type: "end", status, droppedCount: this.droppedCount });
+    const droppedNote =
+      this.droppedCount > 0
+        ? `, ${this.droppedCount} log lines were dropped`
+        : "";
+
+    this.emit({
+      type: "end",
+      status,
+      droppedCount: this.droppedCount,
+      message: `Deployment log stream ended with status ${status}${droppedNote}`,
+    });
 
     if (!this.producer) {
       return;

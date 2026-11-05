@@ -15,6 +15,7 @@ interface DeploymentLogEventBase {
   projectId: string | null;
   sequence: number;
   timestamp: string;
+  message: string;
 }
 
 export interface DeploymentLogLineEvent extends DeploymentLogEventBase {
@@ -22,7 +23,6 @@ export interface DeploymentLogLineEvent extends DeploymentLogEventBase {
   level: DeploymentLogLevel;
   step: DeploymentStep;
   source: DeploymentLogSource;
-  message: string;
   truncated: boolean;
 }
 

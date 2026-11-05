@@ -12,6 +12,7 @@ import { BuildService } from "../services/build.service";
 import { CloneService } from "../services/clone.service";
 import { UploadService, outputKeyPrefix } from "../services/upload.service";
 import { DeploymentError } from "../utils/deployment-error";
+import { formatDuration } from "../utils/format-duration";
 import { resolveInside } from "../utils/resolve-inside";
 import { SecretCipher } from "../utils/secret-cipher";
 
@@ -106,6 +107,7 @@ export const runDeploymentPipeline = async (params: {
   const { deploymentId, userId, encryptedGithubToken, collector } = params;
   const logger = rootLogger.child({ deploymentId });
   const workspace = path.resolve(env.OUTPUT_DIR, deploymentId);
+  const pipelineStartedAt = Date.now();
 
   try {
     const initialized = await runStep(
@@ -115,7 +117,12 @@ export const runDeploymentPipeline = async (params: {
         collector.log(
           "info",
           DeploymentStep.INITIALIZE,
-          "preparing deployment",
+          `Starting deployment ${deploymentId}`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "Looking up the deployment and its project",
         );
 
         const record = await DeploymentRepository.findWithProject(deploymentId);
@@ -129,11 +136,17 @@ export const runDeploymentPipeline = async (params: {
 
         const { deployment, project } = record;
 
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Found project "${project.name}" (${project.slug}), deployment trigger: ${deployment.trigger}`,
+        );
+
         if (deployment.status !== "queued") {
           collector.log(
             "warn",
             DeploymentStep.INITIALIZE,
-            `deployment is ${deployment.status}, skipping`,
+            `Deployment is already ${deployment.status}, nothing to do. Skipping this run`,
           );
           collector.status(deployment.status);
           return undefined;
@@ -153,6 +166,37 @@ export const runDeploymentPipeline = async (params: {
           );
         }
 
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "Deployment is queued and the project is active. Verified ownership",
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Configuration: framework ${deployment.framework}, runtime ${deployment.runtime}, package manager ${deployment.packageManager}`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Source: ${project.repositoryUrl}, ${deployment.commitSha ? `commit ${deployment.commitSha}` : `branch ${deployment.branch}`}`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Root directory: ${deployment.rootDirectory}, output directory: ${deployment.outputDirectory}`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Install command: ${deployment.installCommand}`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          `Build command: ${deployment.buildCommand}`,
+        );
+
         const projectDir = resolveInside(workspace, deployment.rootDirectory);
         const outputDir = projectDir
           ? resolveInside(projectDir, deployment.outputDirectory)
@@ -165,8 +209,24 @@ export const runDeploymentPipeline = async (params: {
           );
         }
 
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "Resolved the build workspace and output paths inside the repository",
+        );
+
         const token = decryptGithubToken(encryptedGithubToken);
         collector.setContext({ projectId: project.id, secrets: [token] });
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "GitHub access token decrypted. It is masked in all logs",
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "Loading and decrypting project environment variables",
+        );
 
         const environmentVariables = await loadEnvironmentVariables(project.id);
         collector.setContext({
@@ -182,7 +242,14 @@ export const runDeploymentPipeline = async (params: {
         collector.log(
           "info",
           DeploymentStep.INITIALIZE,
-          `loaded ${variableCount} environment variable${variableCount === 1 ? "" : "s"}`,
+          variableCount === 0
+            ? "No environment variables are configured for this project"
+            : `Loaded ${variableCount} environment variable${variableCount === 1 ? "" : "s"}: ${Object.keys(environmentVariables).join(", ")}. Values are masked in all logs`,
+        );
+        collector.log(
+          "info",
+          DeploymentStep.INITIALIZE,
+          "Initialization finished. Starting the deployment",
         );
 
         return {
@@ -220,10 +287,11 @@ export const runDeploymentPipeline = async (params: {
         collector.log(
           "info",
           DeploymentStep.CLONE,
-          `cloning ${project.repositoryUrl} (${target})`,
+          `Cloning ${project.repositoryUrl} (${target})`,
         );
 
         const sha = await CloneService.clone({
+          collector,
           repositoryUrl: project.repositoryUrl,
           branch: deployment.branch,
           commitSha: deployment.commitSha,
@@ -231,7 +299,11 @@ export const runDeploymentPipeline = async (params: {
           destination: workspace,
         });
 
-        collector.log("info", DeploymentStep.CLONE, `checked out ${sha}`);
+        collector.log(
+          "info",
+          DeploymentStep.CLONE,
+          `Repository ready at commit ${sha}`,
+        );
         return sha;
       },
     );
@@ -278,9 +350,20 @@ export const runDeploymentPipeline = async (params: {
         { files: uploaded, prefix: outputKeyPrefix(deploymentId) },
         "build output uploaded",
       );
+      collector.log(
+        "info",
+        DeploymentStep.UPLOAD,
+        `Build output stored at ${outputKeyPrefix(deploymentId)}/`,
+      );
     });
 
     await runStep(collector, DeploymentStep.FINALIZE, async () => {
+      collector.log(
+        "info",
+        DeploymentStep.FINALIZE,
+        "Marking the deployment as ready",
+      );
+
       if (!(await DeploymentRepository.markReady(deploymentId))) {
         throw new DeploymentError(
           DeploymentStep.FINALIZE,
@@ -290,12 +373,21 @@ export const runDeploymentPipeline = async (params: {
     });
 
     collector.status("ready");
-    collector.log("info", DeploymentStep.FINALIZE, "deployment is ready");
+    collector.log(
+      "info",
+      DeploymentStep.FINALIZE,
+      `Deployment is ready. Total time ${formatDuration(Date.now() - pipelineStartedAt)}`,
+    );
     return "ready";
   } catch (err) {
     const message = failureMessageOf(err);
 
     logger.error({ err }, "deployment failed");
+    collector.log(
+      "error",
+      err instanceof DeploymentError ? err.step : DeploymentStep.FINALIZE,
+      `Deployment failed after ${formatDuration(Date.now() - pipelineStartedAt)}`,
+    );
     collector.status("failed", message);
     await DeploymentRepository.markFailed(deploymentId, message).catch(
       (markErr: unknown) =>
@@ -303,6 +395,11 @@ export const runDeploymentPipeline = async (params: {
     );
     throw err;
   } finally {
+    collector.log(
+      "info",
+      DeploymentStep.FINALIZE,
+      "Cleaning up the temporary build workspace",
+    );
     await rm(workspace, { recursive: true, force: true }).catch(
       (rmErr: unknown) =>
         logger.warn({ err: rmErr }, "failed to clean up workspace"),

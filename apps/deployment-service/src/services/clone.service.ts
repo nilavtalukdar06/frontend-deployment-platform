@@ -1,7 +1,9 @@
 import { mkdir, rm } from "node:fs/promises";
 import { simpleGit } from "simple-git";
 import { DeploymentStep } from "../constants/deployment-step.enum";
+import type { DeploymentLogCollector } from "../logging/deployment-log-collector";
 import { DeploymentError } from "../utils/deployment-error";
+import { formatDuration } from "../utils/format-duration";
 
 const githubRepositoryUrlPattern =
   /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
@@ -45,13 +47,22 @@ export abstract class CloneService {
     commitSha?: string | null;
     token: string;
     destination: string;
+    collector: DeploymentLogCollector;
   }): Promise<string> {
-    const { repositoryUrl, branch, commitSha, token, destination } = params;
+    const { repositoryUrl, branch, commitSha, token, destination, collector } =
+      params;
+    const note = (message: string) =>
+      collector.log("info", DeploymentStep.CLONE, message);
     const authenticatedUrl = toAuthenticatedUrl(repositoryUrl, token);
     const target = commitSha ? `commit "${commitSha}"` : `branch "${branch}"`;
 
+    note(
+      "Repository URL validated. Authenticating with the GitHub access token",
+    );
+    note("Preparing a clean workspace for the repository");
     await rm(destination, { recursive: true, force: true });
     await mkdir(destination, { recursive: true });
+    const startedAt = Date.now();
 
     try {
       if (commitSha) {
@@ -60,7 +71,9 @@ export abstract class CloneService {
         }
 
         const git = createGit(destination);
+        note(`Initializing an empty repository to fetch commit ${commitSha}`);
         await git.init();
+        note("Fetching the commit with a shallow history (depth 1)");
         await git.fetch([
           "--depth",
           "1",
@@ -68,8 +81,12 @@ export abstract class CloneService {
           authenticatedUrl,
           commitSha,
         ]);
+        note("Fetch complete. Checking out the commit");
         await git.checkout(["--detach", "FETCH_HEAD"]);
       } else {
+        note(
+          `Downloading branch "${branch}" with a shallow, single-branch clone (depth 1)`,
+        );
         await createGit().clone(authenticatedUrl, destination, [
           "--depth",
           "1",
@@ -78,6 +95,10 @@ export abstract class CloneService {
           branch,
         ]);
       }
+
+      note(
+        `Download complete in ${formatDuration(Date.now() - startedAt)}. Verifying the checked out commit`,
+      );
 
       const checkedOutSha = (
         await simpleGit(destination).revparse(["HEAD"])
@@ -92,6 +113,8 @@ export abstract class CloneService {
           `checked out "${checkedOutSha}" instead of "${commitSha}"`,
         );
       }
+
+      note("Checked out commit verified");
 
       return checkedOutSha;
     } catch (err) {
