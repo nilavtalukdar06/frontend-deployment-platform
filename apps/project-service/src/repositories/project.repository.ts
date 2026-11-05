@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../lib/postgres";
 import {
   deployments,
@@ -164,8 +164,23 @@ export abstract class ProjectRepository {
     userId: string,
     limit: number,
     offset: number,
+    search?: string,
   ): Promise<ProjectPage> {
-    const owned = and(eq(projects.userId, userId), isNull(projects.deletedAt));
+    const pattern = search
+      ? `%${search.replace(/[\\%_]/g, "\\$&")}%`
+      : undefined;
+
+    const owned = and(
+      eq(projects.userId, userId),
+      isNull(projects.deletedAt),
+      pattern
+        ? or(
+            ilike(projects.name, pattern),
+            ilike(projects.slug, pattern),
+            ilike(projects.description, pattern),
+          )
+        : undefined,
+    );
 
     const [items, [totals]] = await Promise.all([
       db

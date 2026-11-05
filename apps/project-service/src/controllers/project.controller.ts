@@ -53,11 +53,12 @@ export abstract class ProjectController {
 
   static async list(req: Request, res: Response): Promise<void> {
     const userId = ProjectController.requireUserId(req);
-    const { page, limit } = req.query as unknown as {
+    const { page, limit, search } = req.query as unknown as {
       page: number;
       limit: number;
+      search?: string;
     };
-    const projects = await ProjectService.list(userId, page, limit);
+    const projects = await ProjectService.list(userId, page, limit, search);
 
     res
       .status(StatusCodes.OK)

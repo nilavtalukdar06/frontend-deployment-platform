@@ -335,11 +335,13 @@ export abstract class ProjectService {
     userId: string,
     page: number,
     limit: number,
+    search?: string,
   ): Promise<ProjectList> {
     const { items, total } = await ProjectRepository.listByUser(
       userId,
       limit,
       (page - 1) * limit,
+      search,
     );
 
     return {

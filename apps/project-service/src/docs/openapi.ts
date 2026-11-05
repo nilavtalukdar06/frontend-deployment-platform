@@ -1062,7 +1062,7 @@ const listProjects: JsonObject = {
   operationId: "listProjects",
   summary: "List the authenticated user's projects",
   description:
-    "Newest projects first. Deleted projects and projects of other users are never returned.",
+    "Newest projects first, optionally filtered by `search`. Deleted projects and projects of other users are never returned.",
   security: userIdSecurity,
   parameters: [
     {
@@ -1076,6 +1076,14 @@ const listProjects: JsonObject = {
       in: "query",
       required: false,
       schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+    },
+    {
+      name: "search",
+      in: "query",
+      required: false,
+      description:
+        "Case-insensitive substring match against the project `name`, `slug` and `description`. Leading and trailing whitespace is ignored and a blank value disables the filter. `%`, `_` and `\\` are matched literally. `pagination.total` counts only the matching projects.",
+      schema: { type: "string", maxLength: 100 },
     },
   ],
   responses: {
