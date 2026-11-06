@@ -595,13 +595,6 @@ export abstract class ProjectService {
     );
   }
 
-  /**
-   * Enforces a project's build settings on update: the install command must run
-   * with its package manager and the build command must run on its runtime.
-   * Rejects a command that does not, and resets a command to the appropriate
-   * default when the caller switches package manager or runtime without
-   * supplying a replacement command.
-   */
   private static resolveBuildSettingsChanges(
     changes: ProjectChanges,
     current: Project,

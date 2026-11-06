@@ -181,9 +181,6 @@ export abstract class ProjectValidator {
         message: "At least one field must be provided",
       })
       .superRefine((value, ctx) => {
-        // Only the cases that are fully determined by this request are checked
-        // here; when the package manager or runtime is omitted the service
-        // validates the command against the project's stored value.
         if (
           value.packageManager !== undefined &&
           value.installCommand !== undefined &&

@@ -4,10 +4,6 @@ export { packageManagers, type PackageManager } from "@repo/db";
 
 export const DEFAULT_PACKAGE_MANAGER: PackageManager = "npm";
 
-/**
- * Default install and build commands for each supported package manager. Used
- * to fill in the commands when a project does not override them.
- */
 export const PACKAGE_MANAGER_PRESETS: Record<
   PackageManager,
   { install: string; build: string }
@@ -18,11 +14,6 @@ export const PACKAGE_MANAGER_PRESETS: Record<
   bun: { install: "bun install", build: "bun run build" },
 };
 
-/**
- * Leading binaries a custom install or build command is allowed to invoke for a
- * given package manager. This is what enforces "only these runtimes": a command
- * whose first token is not one of these is rejected.
- */
 export const PACKAGE_MANAGER_BINARIES: Record<
   PackageManager,
   readonly string[]
@@ -33,10 +24,6 @@ export const PACKAGE_MANAGER_BINARIES: Record<
   bun: ["bun", "bunx"],
 };
 
-/**
- * Returns true when `command` invokes the given package manager, i.e. its first
- * whitespace-separated token is one of that package manager's allowed binaries.
- */
 export const commandUsesPackageManager = (
   command: string,
   packageManager: PackageManager,
