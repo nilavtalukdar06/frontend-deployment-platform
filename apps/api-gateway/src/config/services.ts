@@ -14,3 +14,8 @@ export const projectService: UpstreamService = {
   name: "project-service",
   url: env.PROJECT_SERVICE_URL,
 };
+
+export const realtimeService: UpstreamService = {
+  name: "realtime-service",
+  url: env.REALTIME_SERVICE_URL,
+};

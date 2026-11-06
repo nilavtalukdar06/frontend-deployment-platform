@@ -974,6 +974,71 @@ const schemas: Record<string, JsonObject> = {
       },
     ],
   },
+  DeploymentLogMessage: {
+    type: "object",
+    required: [
+      "deploymentId",
+      "sequence",
+      "timestamp",
+      "type",
+      "level",
+      "step",
+      "source",
+      "phase",
+      "status",
+      "message",
+    ],
+    description:
+      "Payload of the `deployment:log` Socket.IO event. Same fields as an item of `GET /deployment/{id}/logs`, except that it has no `id` and carries the `deploymentId`; `sequence` is the key to merge and de-duplicate the two.",
+    properties: {
+      deploymentId: { type: "string", format: "uuid" },
+      sequence: { type: "integer", minimum: 1, example: 12 },
+      timestamp: { type: "string", format: "date-time" },
+      type: {
+        type: ["string", "null"],
+        enum: ["log", "step", "status", "end", null],
+      },
+      level: {
+        type: ["string", "null"],
+        enum: ["debug", "info", "warn", "error", null],
+      },
+      step: {
+        type: ["string", "null"],
+        enum: [
+          "initialize",
+          "clone",
+          "install",
+          "build",
+          "upload",
+          "finalize",
+          null,
+        ],
+      },
+      source: {
+        type: ["string", "null"],
+        enum: ["system", "stdout", "stderr", null],
+      },
+      phase: {
+        type: ["string", "null"],
+        enum: ["started", "completed", "failed", null],
+      },
+      status: {
+        type: ["string", "null"],
+        enum: [
+          "queued",
+          "cloning",
+          "installing",
+          "building",
+          "uploading",
+          "ready",
+          "failed",
+          "canceled",
+          null,
+        ],
+      },
+      message: { type: "string", example: "added 312 packages in 4s" },
+    },
+  },
   EnvironmentVariableResponse: {
     allOf: [
       { $ref: "#/components/schemas/MessageResponse" },
@@ -1764,7 +1829,7 @@ const listDeploymentLogs: JsonObject = {
   operationId: "listDeploymentLogs",
   summary: "List a deployment's logs",
   description:
-    "Protected. Proxied to the project-service `GET /deployment/{id}/logs`. Returns the log events of a deployment in the order the pipeline emitted them (ascending `sequence`), read from ClickHouse where the `log-worker` application stores the events the deployment pipeline publishes to Kafka, so logs show up a moment after they are produced. The deployment must belong to a project owned by the user the bearer token belongs to, otherwise `404`. Pages are cursor based: pass the `nextAfter` of the previous response as `after` to get the following events, which also lets a client poll a running deployment for new lines; `hasMore` tells whether the page was full. A deployment that has not emitted anything yet returns an empty `items` array.",
+    "Protected. Proxied to the project-service `GET /deployment/{id}/logs`. Returns the log events of a deployment in the order the pipeline emitted them (ascending `sequence`), read from ClickHouse where the `log-worker` application stores the events the deployment pipeline publishes to Kafka, so logs show up a moment after they are produced. The deployment must belong to a project owned by the user the bearer token belongs to, otherwise `404`. Pages are cursor based: pass the `nextAfter` of the previous response as `after` to get the following events, which also lets a client poll a running deployment for new lines; `hasMore` tells whether the page was full. A deployment that has not emitted anything yet returns an empty `items` array. For a running deployment, subscribe to the live stream (see `GET /socket.io/`) and use this route for the history.",
   security: bearerSecurity,
   parameters: [
     {
@@ -1809,6 +1874,59 @@ const listDeploymentLogs: JsonObject = {
       ),
     ),
     ...projectProxiedErrorResponses,
+  },
+};
+
+const realtimeSocket: JsonObject = {
+  tags: ["Realtime"],
+  operationId: "realtimeSocket",
+  summary: "Realtime deployment logs (Socket.IO)",
+  description: `Not authenticated by the gateway and not rate limited per message: the gateway proxies this path, including WebSocket upgrades, to the realtime-service (\`REALTIME_SERVICE_URL\`), which authenticates the connection itself. Use the Socket.IO client library rather than calling it by hand.
+
+**Connect** with the access token in the handshake \`auth\` object (a browser WebSocket cannot send an \`Authorization\` header), and prefer the WebSocket transport: long-polling requests are subject to the gateway's proxy timeout and rate limit.
+
+\`\`\`js
+const socket = io("https://api.example.com", {
+  transports: ["websocket"],
+  auth: { token: accessToken },
+});
+\`\`\`
+
+The token is checked exactly like a bearer token on a protected route (signature, issuer, audience, access token type, not blacklisted, session still active). A refused connection fires \`connect_error\` with \`data.code\` \`UNAUTHORIZED\` (no token), \`INVALID_TOKEN\` or \`SERVICE_UNAVAILABLE\`. When the access token expires the server emits \`auth:expired\` and closes the connection; reconnect with a fresh token.
+
+**Client to server events** (each takes an acknowledgement callback):
+
+- \`deployment:subscribe\` \`{ deploymentId }\`: follow a deployment of a project the user owns. Acknowledged with \`{ ok: true, data: { deploymentId, status } }\` or \`{ ok: false, code, message }\` where \`code\` is \`VALIDATION_ERROR\` (not a UUID), \`NOT_FOUND\` (no such deployment for this user), \`SUBSCRIPTION_LIMIT\` (more than 10 deployments on one connection by default) or \`INTERNAL_SERVER_ERROR\`.
+- \`deployment:unsubscribe\` \`{ deploymentId }\`: stop following it. Acknowledged with \`{ ok: true, data: { deploymentId } }\`.
+
+**Server to client events:**
+
+- \`deployment:log\`: one log event (see \`DeploymentLogMessage\`), emitted in order per deployment. The last event of a deployment has \`type\` \`end\`.
+- \`auth:expired\`: the access token expired and the connection is about to close.
+
+**Scaling and delivery.** The deployment pipeline publishes every event to Kafka; the realtime-service instances share one Kafka consumer group and relay each event to all instances over Redis pub/sub, so a client gets its deployment's events whichever instance it is connected to. Delivery is at-least-once and only events produced while subscribed are delivered, so to show a whole deployment subscribe first, then load the history with \`GET /deployment/{id}/logs\` and merge the two by \`sequence\`, dropping duplicates.`,
+  parameters: [
+    {
+      name: "EIO",
+      in: "query",
+      required: true,
+      schema: { type: "string", enum: ["4"] },
+    },
+    {
+      name: "transport",
+      in: "query",
+      required: true,
+      schema: { type: "string", enum: ["websocket", "polling"] },
+    },
+  ],
+  responses: {
+    "101": {
+      description: "Switching protocols: the WebSocket connection is open.",
+    },
+    "200": { description: "Engine.IO handshake packet (polling transport)." },
+    "429": ref("TooManyRequests"),
+    "502": ref("BadGateway"),
+    "503": ref("ServiceUnavailable"),
   },
 };
 
@@ -2165,6 +2283,11 @@ export const openApiDocument: JsonObject = {
         "Encrypted per-project variables passed to the install and build commands of each deployment, proxied to the project-service. All routes require a bearer token.",
     },
     {
+      name: "Realtime",
+      description:
+        "Live deployment logs over Socket.IO (WebSocket), proxied to the realtime-service.",
+    },
+    {
       name: "Webhooks",
       description:
         "Inbound GitHub webhooks that deploy pushes to a project's production branch, proxied to the project-service. Public; authenticated by the webhook signature.",
@@ -2199,6 +2322,7 @@ export const openApiDocument: JsonObject = {
       put: setEnvironmentVariable,
       delete: deleteEnvironmentVariable,
     },
+    "/socket.io/": { get: realtimeSocket },
     "/webhooks/github/projects/{projectId}": { post: githubWebhook },
   },
   components: {

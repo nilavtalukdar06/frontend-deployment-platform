@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { logger } from "./lib/logger";
 import { redisClient } from "./lib/redis";
+import { realtimeProxy } from "./routes/realtime.route";
 
 let server: Server;
 
@@ -12,6 +13,8 @@ export const startServer = (): Server => {
   server = app.listen(env.PORT, () => {
     logger.info(`api-gateway listening on port ${env.PORT} [${env.NODE_ENV}]`);
   });
+
+  server.on("upgrade", realtimeProxy.upgrade);
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));

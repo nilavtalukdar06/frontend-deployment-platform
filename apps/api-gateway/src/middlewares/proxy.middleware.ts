@@ -70,18 +70,26 @@ const isServerResponse = (
 
 export interface ServiceProxyOptions {
   maxBodyBytes?: number;
+  ws?: boolean;
 }
+
+export type ServiceProxy = RequestHandler &
+  Pick<ReturnType<typeof createProxyMiddleware>, "upgrade">;
 
 export const createServiceProxy = (
   service: UpstreamService,
   pathFilter: string,
-  { maxBodyBytes = env.MAX_REQUEST_BODY_BYTES }: ServiceProxyOptions = {},
-): RequestHandler =>
+  {
+    maxBodyBytes = env.MAX_REQUEST_BODY_BYTES,
+    ws = false,
+  }: ServiceProxyOptions = {},
+): ServiceProxy =>
   createProxyMiddleware<TrackedRequest, ServerResponse>({
     target: service.url,
     pathFilter,
     changeOrigin: true,
     xfwd: true,
+    ws,
     on: {
       proxyReq: (proxyReq, req) => {
         proxyReq.removeHeader(USER_ID_HEADER);
@@ -154,4 +162,4 @@ export const createServiceProxy = (
         );
       },
     },
-  }) as unknown as RequestHandler;
+  }) as unknown as ServiceProxy;
