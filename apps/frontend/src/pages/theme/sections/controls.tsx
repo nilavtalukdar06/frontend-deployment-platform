@@ -181,7 +181,7 @@ function FormControlsSection() {
         <Specimen label="Search, textarea and fields">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-subtle" />
-            <Input placeholder="Search projects…" className="h-[42px] pl-10" />
+            <Input placeholder="Search projects…" className="h-10.5 pl-10" />
           </div>
           <div className="flex h-9 items-center gap-2.5 rounded-md border border-border-strong bg-card px-3 text-sm text-subtle">
             <Search className="size-4" />
@@ -336,7 +336,7 @@ function FormControlsSection() {
 
       <Specimen label="Collapsible section header">
         <div className="overflow-hidden rounded-lg border border-border-strong bg-card">
-          <div className="flex h-[50px] items-center gap-3 border-b border-border px-5 text-title font-medium">
+          <div className="flex h-12.5 items-center gap-3 border-b border-border px-5 text-title font-medium">
             <ChevronDown className="size-4 text-muted-foreground" />
             Build and output settings
           </div>
@@ -450,16 +450,16 @@ function BadgesSection() {
         <Avatar className="size-5">
           <AvatarFallback className="text-[10px]">N</AvatarFallback>
         </Avatar>
-        <Avatar className="size-[22px]">
+        <Avatar className="size-5.5">
           <AvatarFallback className="text-[10px]">N</AvatarFallback>
         </Avatar>
         <Avatar className="size-7">
           <AvatarFallback>N</AvatarFallback>
         </Avatar>
-        <Avatar className="size-[30px]">
+        <Avatar className="size-7.5">
           <AvatarFallback />
         </Avatar>
-        <span className="size-[30px] rounded-full bg-[#16a34a]" />
+        <span className="size-7.5 rounded-full bg-[#16a34a]" />
       </Specimen>
     </Section>
   );
@@ -515,7 +515,7 @@ function AlertsSection() {
         </Alert>
       </div>
       <Specimen label="Building strip">
-        <div className="flex h-[41px] items-center justify-between overflow-hidden rounded-lg border-y border-border bg-warning-surface px-5 text-sm text-warning">
+        <div className="flex h-10.25 items-center justify-between overflow-hidden rounded-lg border-y border-border bg-warning-surface px-5 text-sm text-warning">
           <span className="flex items-center gap-3">
             <span className="size-3.5 animate-spin rounded-full border-2 border-warning border-t-transparent" />
             <span>

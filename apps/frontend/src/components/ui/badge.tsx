@@ -16,7 +16,7 @@ const badgeVariants = cva(
         destructive:
           "border-destructive-border bg-destructive-surface text-destructive",
         info: "border-info-border bg-info-surface text-info",
-        current: "h-[18px] gap-1 bg-info-solid px-1.5 text-white",
+        current: "h-4.5 gap-1 bg-info-solid px-1.5 text-white",
         muted: "border-border bg-muted text-muted-foreground",
       },
     },

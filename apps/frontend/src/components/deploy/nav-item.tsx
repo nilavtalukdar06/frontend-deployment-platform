@@ -12,7 +12,7 @@ function NavItem({
       data-slot="nav-item"
       data-active={active ? "" : undefined}
       className={cn(
-        "flex h-[34px] items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground data-active:bg-accent data-active:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
+        "flex h-8.5 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground data-active:bg-accent data-active:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
         className,
       )}
       {...props}

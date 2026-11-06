@@ -12,7 +12,7 @@ function ChartTooltip() {
     <div className="flex flex-col gap-1 rounded-lg border border-border-strong bg-muted px-3 py-2 text-label shadow-xl shadow-black">
       <span className="text-muted-foreground">Nov 6, 7:00 – 8:00 PM</span>
       <span className="flex items-center gap-2 font-medium">
-        <span className="size-2 rounded-[2px] bg-chart-1" />
+        <span className="size-2 rounded-xs bg-chart-1" />
         612 views
       </span>
     </div>
@@ -42,7 +42,7 @@ function BarChartCard() {
       </div>
       <div className="relative border-t border-border px-6 pt-8 pb-4">
         <div className="flex gap-4">
-          <div className="flex h-[240px] flex-col justify-between text-right text-label text-muted-foreground">
+          <div className="flex h-60 flex-col justify-between text-right text-label text-muted-foreground">
             {yAxisTicks.map((tick) => (
               <span key={tick} className="w-8 leading-none">
                 {tick}
@@ -50,7 +50,7 @@ function BarChartCard() {
             ))}
           </div>
           <div className="flex flex-1 flex-col gap-3">
-            <div className="relative h-[240px]">
+            <div className="relative h-60">
               {yAxisTicks.map((tick) => (
                 <span
                   key={tick}
@@ -58,7 +58,7 @@ function BarChartCard() {
                   style={{ top: `${100 - (tick / chartMax) * 100}%` }}
                 />
               ))}
-              <div className="absolute inset-0 flex items-end gap-[6px]">
+              <div className="absolute inset-0 flex items-end gap-1.5">
                 {hourlyViews.map((views, index) => (
                   <span
                     key={index}
@@ -78,7 +78,7 @@ function BarChartCard() {
                 <ChartTooltip />
               </div>
             </div>
-            <div className="flex gap-[6px] text-label text-muted-foreground">
+            <div className="flex gap-1.5 text-label text-muted-foreground">
               {hourLabels.map((label, index) => (
                 <span key={index} className="relative h-4 flex-1">
                   {label && (
@@ -103,7 +103,7 @@ function Donut() {
   let offset = 0;
 
   return (
-    <div className="relative size-[224px] shrink-0">
+    <div className="relative size-56 shrink-0">
       <svg viewBox="0 0 224 224" className="size-full -rotate-90">
         {routeShares.map((segment) => {
           const length = (segment.share / 100) * circumference;

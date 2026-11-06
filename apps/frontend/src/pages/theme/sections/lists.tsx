@@ -39,7 +39,7 @@ const statusLabels = {
 
 function RowMenu() {
   return (
-    <div className="absolute top-full right-5 z-10 mt-1 flex w-[220px] flex-col rounded-lg border border-border-strong bg-card p-1.5 shadow-2xl shadow-black">
+    <div className="absolute top-full right-5 z-10 mt-1 flex w-55 flex-col rounded-lg border border-border-strong bg-card p-1.5 shadow-2xl shadow-black">
       <span className="flex h-9 items-center gap-3 rounded-md px-3 text-sm">
         <FileText className="size-4 text-muted-foreground" />
         Inspect deployment
@@ -96,7 +96,7 @@ function DeploymentRow({ deployment }: { deployment: DemoDeployment }) {
       </div>
       <div className="flex items-center justify-end gap-3 text-sm text-muted-foreground">
         <span>{deployment.time}</span>
-        <Avatar className="size-[22px]">
+        <Avatar className="size-5.5">
           <AvatarFallback className="text-[10px]" />
         </Avatar>
         <span
@@ -130,7 +130,7 @@ function ListsSection() {
             Import Git repository
           </h4>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
-            <div className="flex h-[42px] items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
+            <div className="flex h-10.5 items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
               <Avatar className="size-5">
                 <AvatarFallback className="text-[10px]">N</AvatarFallback>
               </Avatar>
@@ -138,7 +138,7 @@ function ListsSection() {
             </div>
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-subtle" />
-              <Input placeholder="Search…" className="h-[42px] pl-10" />
+              <Input placeholder="Search…" className="h-10.5 pl-10" />
             </div>
           </div>
           <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -171,7 +171,7 @@ function ListsSection() {
                 )}
               </div>
             ))}
-            <div className="flex h-[54px] items-center justify-center text-label text-muted-foreground">
+            <div className="flex h-13.5 items-center justify-center text-label text-muted-foreground">
               Load more repositories
             </div>
           </div>

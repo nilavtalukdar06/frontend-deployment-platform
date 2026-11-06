@@ -13,7 +13,7 @@ function ProjectIcon({
       data-slot="project-icon"
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full border border-border-strong bg-background text-brand",
-        size === "md" ? "size-[38px]" : "size-8",
+        size === "md" ? "size-9.5" : "size-8",
         className,
       )}
     >

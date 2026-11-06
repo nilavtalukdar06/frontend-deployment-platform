@@ -18,8 +18,8 @@ import { Section, Specimen } from "@/pages/theme/sections/section";
 function SidebarFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex w-60 flex-col overflow-hidden rounded-xl border border-border bg-background">
-      <div className="flex h-[61px] items-center gap-3 border-b border-border px-5">
-        <VercelLogo className="h-4 w-[18px] text-foreground" />
+      <div className="flex h-15.25 items-center gap-3 border-b border-border px-5">
+        <VercelLogo className="h-4 w-4.5 text-foreground" />
         <span className="text-title font-medium">Deploy</span>
       </div>
       <div className="flex flex-col gap-4 p-3">
@@ -75,7 +75,7 @@ function NavigationSection() {
         </Specimen>
         <div className="flex min-w-0 flex-1 flex-col gap-8">
           <Specimen label="Header with project switcher">
-            <div className="flex h-[61px] items-center justify-between rounded-xl border border-border bg-background px-6">
+            <div className="flex h-15.25 items-center justify-between rounded-xl border border-border bg-background px-6">
               <span className="flex items-center gap-2 text-sm font-medium">
                 dor-check
                 <ChevronsUpDown className="size-3.5 text-subtle" />
@@ -87,14 +87,14 @@ function NavigationSection() {
             </div>
           </Specimen>
           <Specimen label="Account header (new project)">
-            <div className="flex h-[61px] items-center justify-between rounded-xl border border-border bg-background px-6">
+            <div className="flex h-15.25 items-center justify-between rounded-xl border border-border bg-background px-6">
               <span className="flex items-center gap-3 text-sm font-medium">
-                <span className="size-[30px] rounded-full bg-[#16a34a]" />
+                <span className="size-7.5 rounded-full bg-[#16a34a]" />
                 nilavtalukdar06’s projects
                 <ChevronsUpDown className="size-3.5 text-subtle" />
               </span>
               <span className="text-sm">New project</span>
-              <Avatar className="size-[30px]">
+              <Avatar className="size-7.5">
                 <AvatarFallback />
               </Avatar>
             </div>

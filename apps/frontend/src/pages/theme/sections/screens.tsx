@@ -7,10 +7,10 @@ import { Section, Specimen } from "@/pages/theme/sections/section";
 
 function LoginPreview() {
   return (
-    <div className="bg-grid flex min-h-[640px] items-center justify-center overflow-hidden rounded-xl border border-border bg-black p-6">
-      <div className="flex w-[380px] flex-col items-center bg-black px-0 py-10">
-        <span className="flex size-[60px] items-center justify-center rounded-2xl border border-border-strong bg-card">
-          <VercelLogo className="h-[22px] w-[25px] text-foreground" />
+    <div className="bg-grid flex min-h-160 items-center justify-center overflow-hidden rounded-xl border border-border bg-black p-6">
+      <div className="flex w-95 flex-col items-center bg-black px-0 py-10">
+        <span className="flex size-15 items-center justify-center rounded-2xl border border-border-strong bg-card">
+          <VercelLogo className="h-5.5 w-6.25 text-foreground" />
         </span>
         <h3 className="mt-10 text-auth font-medium">Log in to Deploy</h3>
         <p className="mt-3 text-center text-sm text-muted-foreground">

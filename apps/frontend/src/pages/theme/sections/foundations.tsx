@@ -218,11 +218,11 @@ function IconsSection() {
     >
       <Specimen label="Brand">
         <div className="flex flex-wrap items-center gap-6">
-          <span className="flex size-[60px] items-center justify-center rounded-2xl border border-border-strong bg-card">
-            <VercelLogo className="h-[22px] w-[25px] text-foreground" />
+          <span className="flex size-15 items-center justify-center rounded-2xl border border-border-strong bg-card">
+            <VercelLogo className="h-5.5 w-6.25 text-foreground" />
           </span>
           <span className="flex items-center gap-3">
-            <VercelLogo className="h-4 w-[18px] text-foreground" />
+            <VercelLogo className="h-4 w-4.5 text-foreground" />
             <span className="text-title font-medium">Deploy</span>
           </span>
           <span className="flex size-12 items-center justify-center rounded-lg border border-border-strong bg-card">

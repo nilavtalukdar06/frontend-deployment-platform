@@ -29,7 +29,7 @@ const statusLabels = {
 
 function ProjectCard({ project }: { project: DemoProject }) {
   return (
-    <Card className="min-h-[205px] gap-4 p-5">
+    <Card className="min-h-51.25 gap-4 p-5">
       <div className="flex items-start gap-3">
         <ProjectIcon />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -52,7 +52,7 @@ function ProjectCard({ project }: { project: DemoProject }) {
           <Ellipsis className="size-4 text-muted-foreground" />
         </div>
       </div>
-      <p className="line-clamp-2 min-h-[42px] text-sm text-subtle">
+      <p className="line-clamp-2 min-h-10.5 text-sm text-subtle">
         {project.description}
       </p>
       <div className="flex items-center gap-3 text-sm">
@@ -128,7 +128,7 @@ function ProductionDeploymentCard() {
       <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
         <span className="text-title font-medium">Production deployment</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-lg" className="size-[34px]">
+          <Button variant="outline" size="icon-lg" className="size-8.5">
             <GithubIcon />
           </Button>
           <Button variant="outline">
@@ -141,7 +141,7 @@ function ProductionDeploymentCard() {
           </Button>
         </div>
       </div>
-      <div className="flex h-[41px] items-center justify-between border-b border-border bg-warning-surface px-6 text-sm text-warning">
+      <div className="flex h-10.25 items-center justify-between border-b border-border bg-warning-surface px-6 text-sm text-warning">
         <span className="flex items-center gap-3">
           <span className="size-3.5 animate-spin rounded-full border-2 border-warning border-t-transparent" />
           <span>
@@ -155,8 +155,8 @@ function ProductionDeploymentCard() {
         </span>
       </div>
       <div className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-[minmax(0,413px)_1fr]">
-        <div className="flex aspect-[413/258] items-center justify-center overflow-hidden rounded-lg border border-border-strong bg-[#fafafa] text-[#111]">
-          <div className="flex w-[190px] flex-col items-center gap-2 text-[11px]">
+        <div className="flex aspect-413/258 items-center justify-center overflow-hidden rounded-lg border border-border-strong bg-[#fafafa] text-[#111]">
+          <div className="flex w-47.5 flex-col items-center gap-2 text-[11px]">
             <span className="flex items-center gap-1.5 font-medium">
               <span className="size-2 rounded-full bg-chart-1" />
               Trap Detector
@@ -358,7 +358,7 @@ function ImportSourceBox() {
 
 function MiniBarChart() {
   return (
-    <div className="flex h-[78px] items-end gap-[3px]">
+    <div className="flex h-19.5 items-end gap-0.75">
       {miniBars.map((height, index) => (
         <span
           key={index}

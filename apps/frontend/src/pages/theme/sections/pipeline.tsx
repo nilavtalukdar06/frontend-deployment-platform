@@ -34,7 +34,7 @@ function PipelineCard() {
               >
                 {step.name}
               </span>
-              <span className="min-h-[18px] text-label text-subtle">
+              <span className="min-h-4.5 text-label text-subtle">
                 {step.detail}
               </span>
             </div>
@@ -50,7 +50,7 @@ function BuildLogsCard() {
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex h-[50px] items-center justify-between px-5">
+      <div className="flex h-12.5 items-center justify-between px-5">
         <span className="flex items-center gap-3 text-title font-medium">
           <ChevronDown className="size-4 text-muted-foreground" />
           Build logs
@@ -60,7 +60,7 @@ function BuildLogsCard() {
           <LoaderCircle className="size-4 animate-spin text-warning" />
         </span>
       </div>
-      <div className="flex h-[54px] items-center justify-between gap-4 border-y border-border px-5 text-sm text-muted-foreground">
+      <div className="flex h-13.5 items-center justify-between gap-4 border-y border-border px-5 text-sm text-muted-foreground">
         <span className="flex items-center gap-4">
           <Copy className="size-4" />
           {logLines.length} lines
@@ -74,7 +74,7 @@ function BuildLogsCard() {
             <TriangleAlert className="size-4" />
             {warningCount}
           </span>
-          <span className="flex h-8 w-[240px] items-center gap-2.5 rounded-md border border-border-strong bg-background px-3 text-subtle">
+          <span className="flex h-8 w-60 items-center gap-2.5 rounded-md border border-border-strong bg-background px-3 text-subtle">
             <Search className="size-4" />
             <span className="flex-1">Find in logs</span>
             <Kbd>⌘F</Kbd>
@@ -87,7 +87,7 @@ function BuildLogsCard() {
             key={line.time}
             className={`flex h-6 items-center gap-6 px-5 ${line.level === "warn" ? "bg-warning-subtle text-warning" : "text-log"}`}
           >
-            <span className="w-[94px] shrink-0 text-subtle">{line.time}</span>
+            <span className="w-23.5 shrink-0 text-subtle">{line.time}</span>
             <span className="truncate">{line.message}</span>
           </div>
         ))}

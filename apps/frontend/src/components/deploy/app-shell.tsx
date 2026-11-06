@@ -39,8 +39,8 @@ function AppSidebar({ children }: { children: ReactNode }) {
       data-slot="sidebar"
       className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r border-border bg-sidebar lg:flex"
     >
-      <div className="flex h-[61px] shrink-0 items-center gap-3 border-b border-border px-5">
-        <VercelLogo className="h-4 w-[18px] text-foreground" />
+      <div className="flex h-15.25 shrink-0 items-center gap-3 border-b border-border px-5">
+        <VercelLogo className="h-4 w-4.5 text-foreground" />
         <span className="text-title font-medium">Deploy</span>
       </div>
       <div className="flex flex-col gap-4 p-3">
@@ -62,7 +62,7 @@ function AppHeader({ title }: { title: ReactNode }) {
   return (
     <header
       data-slot="header"
-      className="sticky top-0 z-20 flex h-[61px] shrink-0 items-center justify-between border-b border-border bg-background/85 px-6 backdrop-blur"
+      className="sticky top-0 z-20 flex h-15.25 shrink-0 items-center justify-between border-b border-border bg-background/85 px-6 backdrop-blur"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
         {title}

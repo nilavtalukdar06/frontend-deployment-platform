@@ -18,7 +18,7 @@ const buttonVariants = cva(
         link: "text-foreground underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-[34px] gap-2 px-4 has-[>svg]:px-3",
+        default: "h-8.5 gap-2 px-4 has-[>svg]:px-3",
         xs: "h-6 gap-1 rounded-sm px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
         sm: "h-8 gap-1.5 px-3 text-[13px] [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 gap-2 px-4 text-sm",
