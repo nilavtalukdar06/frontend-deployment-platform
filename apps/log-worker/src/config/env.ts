@@ -32,6 +32,9 @@ export const env = createEnv({
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
+    CLICKHOUSE_URL: z.url(),
+    CLICKHOUSE_USERNAME: z.string().min(1),
+    CLICKHOUSE_PASSWORD: z.string().min(1),
 
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   },

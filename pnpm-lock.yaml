@@ -433,6 +433,9 @@ importers:
 
   apps/log-worker:
     dependencies:
+      '@clickhouse/client':
+        specifier: ^1.25.0
+        version: 1.25.0
       '@confluentinc/kafka-javascript':
         specifier: ^1.11.0
         version: 1.11.0(supports-color@7.2.0)
@@ -1008,6 +1011,10 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@clickhouse/client@1.25.0':
+    resolution: {integrity: sha512-sxoCDlA8iOEGpGrJzl9SeNvG7II6e5kSeo0JI4Mru2QhwhjydWuDEE55ryZg3vIJ0CSJ1bhn9+Xtnuvf1BZT/w==}
+    engines: {node: '>=20'}
 
   '@confluentinc/kafka-javascript@1.11.0':
     resolution: {integrity: sha512-DKv7bvUiT60UlBEBNYq54v8kKaRlN/zMhZFTtkjm/qXDxiUSkiEP1JQRncr2I9QEa9Tq51kuDTyVnR4ZQFzmMw==}
@@ -5521,6 +5528,8 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@clickhouse/client@1.25.0': {}
 
   '@confluentinc/kafka-javascript@1.11.0(supports-color@7.2.0)':
     dependencies:
