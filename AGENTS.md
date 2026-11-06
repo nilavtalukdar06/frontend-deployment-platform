@@ -59,6 +59,14 @@
 - Before considering a microservice change complete, check whether the api
   gateway needs a matching update, and make it when it does.
 
+## Tailwind CSS
+
+- After writing or editing any frontend component or file that uses Tailwind
+  classes, remove any Tailwind warnings before considering the change
+  complete (e.g. unknown-at-rule warnings on `@theme`/`@apply`/
+  `@custom-variant`/`@utility`, and any editor or lint warnings surfaced by
+  the Tailwind tooling).
+
 ## Environment variables
 
 - Whenever a new package is installed or a new service (database, cache,
