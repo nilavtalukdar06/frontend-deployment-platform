@@ -25,7 +25,9 @@ export interface Session {
   user: CurrentUser;
 }
 
-let sessionRequest: Promise<Session | null> | undefined;
+let currentAccessToken: string | null = null;
+
+export const getAccessToken = (): string | null => currentAccessToken;
 
 const requestAccessToken = async (): Promise<string | null> => {
   const response = await fetch(`${env.VITE_API_URL}/auth/refresh`, {
@@ -33,8 +35,12 @@ const requestAccessToken = async (): Promise<string | null> => {
     credentials: "include",
   });
 
-  if (!response.ok) {
+  if (response.status === 401) {
     return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("token refresh failed");
   }
 
   const parsed = refreshResponseSchema.safeParse(await response.json());
@@ -49,8 +55,12 @@ const requestCurrentUser = async (
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  if (!response.ok) {
+  if (response.status === 401) {
     return null;
+  }
+
+  if (!response.ok) {
+    throw new Error("current user request failed");
   }
 
   const parsed = currentUserResponseSchema.safeParse(await response.json());
@@ -58,37 +68,42 @@ const requestCurrentUser = async (
   return parsed.success ? parsed.data.data : null;
 };
 
-const requestSession = async (): Promise<Session | null> => {
+export const loadSession = async (): Promise<Session | null> => {
   const accessToken = await requestAccessToken();
 
   if (!accessToken) {
+    currentAccessToken = null;
     return null;
   }
 
   const user = await requestCurrentUser(accessToken);
 
-  return user ? { accessToken, user } : null;
-};
+  if (!user) {
+    currentAccessToken = null;
+    return null;
+  }
 
-export const loadSession = (): Promise<Session | null> => {
-  sessionRequest ??= requestSession();
-  return sessionRequest;
+  currentAccessToken = accessToken;
+
+  return { accessToken, user };
 };
 
 export const signInWithGithub = (): void => {
   window.location.href = `${env.VITE_API_URL}/auth/github`;
 };
 
-export const signOut = async (accessToken: string): Promise<void> => {
+export const signOut = async (): Promise<void> => {
   const response = await fetch(`${env.VITE_API_URL}/auth/logout`, {
     method: "POST",
     credentials: "include",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: currentAccessToken
+      ? { Authorization: `Bearer ${currentAccessToken}` }
+      : undefined,
   });
 
   if (!response.ok) {
     throw new Error("sign out failed");
   }
 
-  sessionRequest = undefined;
+  currentAccessToken = null;
 };

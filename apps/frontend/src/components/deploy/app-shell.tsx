@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
-import { ChevronsUpDown, Ellipsis, Plus, Search } from "lucide-react";
+import { ChevronsUpDown, LogOut, Plus, Search } from "lucide-react";
 import { VercelLogo } from "@/components/brand/vercel-logo";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuthenticatedSession } from "@/components/auth/session-context";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { StatusDot } from "@/components/deploy/status-dot";
@@ -17,17 +19,33 @@ function SidebarSearch() {
 }
 
 function SidebarUser() {
+  const { user } = useAuthenticatedSession();
+  const signOut = useSignOut();
+  const displayName = user.name ?? user.githubLogin;
+
   return (
     <div className="flex items-center gap-3">
       <Avatar className="size-7">
-        <AvatarFallback>N</AvatarFallback>
+        {user.avatarUrl && (
+          <AvatarImage src={user.avatarUrl} alt={user.githubLogin} />
+        )}
+        <AvatarFallback>{displayName.slice(0, 1).toUpperCase()}</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="truncate text-label font-medium">Nilav Talukdar</span>
-        <span className="truncate text-xs text-subtle">@nilavtalukdar06</span>
+        <span className="truncate text-label font-medium">{displayName}</span>
+        <span className="truncate text-xs text-subtle">
+          @{user.githubLogin}
+        </span>
       </div>
-      <Button variant="outline" size="icon" className="rounded-full">
-        <Ellipsis />
+      <Button
+        variant="outline"
+        size="icon"
+        className="rounded-full"
+        aria-label="Log out"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
+        <LogOut />
       </Button>
     </div>
   );
