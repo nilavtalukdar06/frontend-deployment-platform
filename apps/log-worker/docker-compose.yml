@@ -1,0 +1,12 @@
+services:
+  log-worker:
+    build:
+      context: ../..
+      dockerfile: apps/log-worker/Dockerfile
+    image: log-worker
+    container_name: log-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
