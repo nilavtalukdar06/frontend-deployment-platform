@@ -1,0 +1,12 @@
+services:
+  analytics-worker:
+    build:
+      context: ../..
+      dockerfile: apps/analytics-worker/Dockerfile
+    image: analytics-worker
+    container_name: analytics-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production

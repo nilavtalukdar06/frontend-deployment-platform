@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
-    "@clickhouse/client": "^1.25.0",
     "@confluentinc/kafka-javascript": "^1.11.0",
     "@neondatabase/serverless": "^1.2.0",
     "@t3-oss/env-core": "^0.13.11",

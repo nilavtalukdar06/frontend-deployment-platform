@@ -6,7 +6,6 @@ import { withTimeout } from "../utils/with-timeout";
 import { logger as rootLogger } from "./logger";
 
 export type KafkaProducer = KafkaJS.Producer;
-export type KafkaConsumer = KafkaJS.Consumer;
 
 const kafkaLogger = rootLogger.child({ component: "kafka" });
 
@@ -64,7 +63,6 @@ const getKafka = (): KafkaJS.Kafka => {
 };
 
 let producerConnection: Promise<KafkaProducer> | undefined;
-let consumer: KafkaConsumer | undefined;
 
 const openProducer = async (): Promise<KafkaProducer> => {
   const candidate = getKafka().producer({
@@ -103,43 +101,6 @@ export const connectProducer = (): Promise<KafkaProducer> => {
   return producerConnection;
 };
 
-export const connectConsumer = async (): Promise<KafkaConsumer> => {
-  if (consumer) {
-    return consumer;
-  }
-
-  const candidate = getKafka().consumer({
-    kafkaJS: {
-      groupId: env.KAFKA_CONSUMER_GROUP_ID,
-      fromBeginning: env.KAFKA_CONSUMER_FROM_BEGINNING,
-      sessionTimeout: 30_000,
-      heartbeatInterval: 3_000,
-    },
-  });
-
-  try {
-    await withTimeout(
-      candidate.connect(),
-      connectTimeoutMs,
-      `kafka consumer did not connect within ${connectTimeoutMs}ms`,
-    );
-  } catch (err) {
-    await candidate.disconnect().catch(() => undefined);
-    throw err;
-  }
-
-  consumer = candidate;
-  kafkaLogger.info(
-    {
-      brokers: env.KAFKA_BROKERS,
-      groupId: env.KAFKA_CONSUMER_GROUP_ID,
-      topic: env.KAFKA_ANALYTICS_TOPIC,
-    },
-    "kafka consumer connected",
-  );
-  return consumer;
-};
-
 export const disconnectProducer = async (timeoutMs: number): Promise<void> => {
   const connection = producerConnection;
   producerConnection = undefined;
@@ -158,25 +119,5 @@ export const disconnectProducer = async (timeoutMs: number): Promise<void> => {
     kafkaLogger.info("kafka producer disconnected");
   } catch (err) {
     kafkaLogger.error({ err }, "kafka producer disconnect failed");
-  }
-};
-
-export const disconnectConsumer = async (timeoutMs: number): Promise<void> => {
-  const current = consumer;
-  consumer = undefined;
-
-  if (!current) {
-    return;
-  }
-
-  try {
-    await withTimeout(
-      current.disconnect(),
-      timeoutMs,
-      `kafka consumer did not disconnect within ${timeoutMs}ms`,
-    );
-    kafkaLogger.info("kafka consumer disconnected");
-  } catch (err) {
-    kafkaLogger.error({ err }, "kafka consumer disconnect failed");
   }
 };

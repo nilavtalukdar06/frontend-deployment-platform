@@ -43,18 +43,6 @@ export const env = createEnv({
     KAFKA_CA_CERT_PATH: z.string().min(1).default("ca.pem"),
     KAFKA_CLIENT_ID: z.string().min(1).default("proxy-service"),
     KAFKA_ANALYTICS_TOPIC: z.string().min(1).default("analytics"),
-    KAFKA_CONSUMER_GROUP_ID: z
-      .string()
-      .min(1)
-      .default("proxy-service-analytics"),
-    KAFKA_CONSUMER_FROM_BEGINNING: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
-
-    CLICKHOUSE_URL: z.url(),
-    CLICKHOUSE_USERNAME: z.string().min(1),
-    CLICKHOUSE_PASSWORD: z.string().min(1),
 
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

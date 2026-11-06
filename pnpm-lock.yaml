@@ -15,6 +15,49 @@ importers:
         specifier: ^2.3.0
         version: 2.11.10
 
+  apps/analytics-worker:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.25.0
+        version: 1.25.0
+      '@confluentinc/kafka-javascript':
+        specifier: ^1.11.0
+        version: 1.11.0(supports-color@7.2.0)
+      '@t3-oss/env-core':
+        specifier: ^0.13.11
+        version: 0.13.11(typescript@5.9.3)(zod@4.6.7)
+      dotenv:
+        specifier: ^18.0.9
+        version: 18.0.9
+      pino:
+        specifier: ^10.4.0
+        version: 10.4.0
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
+      pino-pretty:
+        specifier: ^13.2.0
+        version: 13.2.0
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.32)(supports-color@7.2.0)(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/api-gateway:
     dependencies:
       '@t3-oss/env-core':
@@ -594,9 +637,6 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1161.0
         version: 3.1161.0
-      '@clickhouse/client':
-        specifier: ^1.25.0
-        version: 1.25.0
       '@confluentinc/kafka-javascript':
         specifier: ^1.11.0
         version: 1.11.0(supports-color@7.2.0)
