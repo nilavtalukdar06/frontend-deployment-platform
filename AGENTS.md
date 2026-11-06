@@ -67,6 +67,25 @@
   `@custom-variant`/`@utility`, and any editor or lint warnings surfaced by
   the Tailwind tooling).
 
+## Frontend loading, error, and empty states
+
+- Every dynamic route (any route with a path param, e.g. `:id`, `:slug`)
+  must render a custom loading screen while its data is being fetched and a
+  custom error screen if that fetch fails. Generic/default fallbacks are not
+  acceptable — each dynamic route's loading and error screens should reflect
+  that route's own layout and content.
+- Every GET request that fetches data from a server (queries, list views,
+  detail views, dashboards, etc.) must handle three states in its UI:
+  1. Loading — a skeleton loader matching the shape of the content being
+     fetched, not a generic spinner, unless the component is too small/
+     inline for a skeleton to make sense.
+  2. Error — an error UI that communicates the failure and, where
+     applicable, offers a retry action.
+  3. Empty — an empty-state UI shown when the request succeeds but returns
+     no data, distinct from both the loading and error states.
+- These three states must be implemented before a data-fetching feature or
+  dynamic route is considered complete.
+
 ## Environment variables
 
 - Whenever a new package is installed or a new service (database, cache,
