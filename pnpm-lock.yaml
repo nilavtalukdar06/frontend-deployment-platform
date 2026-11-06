@@ -594,6 +594,12 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1161.0
         version: 3.1161.0
+      '@clickhouse/client':
+        specifier: ^1.25.0
+        version: 1.25.0
+      '@confluentinc/kafka-javascript':
+        specifier: ^1.11.0
+        version: 1.11.0(supports-color@7.2.0)
       '@neondatabase/serverless':
         specifier: ^1.2.0
         version: 1.2.0

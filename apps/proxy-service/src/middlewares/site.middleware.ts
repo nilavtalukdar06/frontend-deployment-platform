@@ -2,6 +2,10 @@ import { pipeline } from "node:stream/promises";
 import type { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
+import {
+  AnalyticsProducerService,
+  toRoute,
+} from "../services/analytics-producer.service";
 import { DeploymentResolverService } from "../services/deployment-resolver.service";
 import { SiteService, toRelativePath } from "../services/site.service";
 
@@ -17,6 +21,9 @@ const siteLabelFor = (hostname: string): string | null => {
 
   return label && !label.includes(".") ? label : null;
 };
+
+const isHtmlDocument = (relativePath: string): boolean =>
+  relativePath.endsWith(".html");
 
 const sendText = (res: Response, statusCode: number, message: string) => {
   res
@@ -99,6 +106,14 @@ export const siteHandler = async (
     }
 
     await pipeline(file.body, res);
+
+    if (isHtmlDocument(file.relativePath)) {
+      AnalyticsProducerService.recordPageView({
+        site: label,
+        deploymentId,
+        route: toRoute(req.path),
+      });
+    }
   } catch (err) {
     if (res.headersSent) {
       req.log.warn({ err }, "site response stream aborted");

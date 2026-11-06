@@ -1,8 +1,12 @@
 import type { Server } from "node:http";
 import { createApp } from "./app";
 import { env } from "./config/env";
+import { clickhouseClient } from "./db/clickhouse";
+import { disconnectConsumer, disconnectProducer } from "./lib/kafka";
 import { logger } from "./lib/logger";
 import { closePostgres } from "./lib/postgres";
+import { AnalyticsConsumerService } from "./services/analytics-consumer.service";
+import { AnalyticsProducerService } from "./services/analytics-producer.service";
 
 let server: Server;
 
@@ -13,6 +17,13 @@ export const startServer = (): Server => {
     logger.info(
       `proxy-service listening on port ${env.PORT} for *.${env.ROOT_DOMAIN} [${env.NODE_ENV}]`,
     );
+  });
+
+  AnalyticsProducerService.warmUp().catch((err: unknown) => {
+    logger.error({ err }, "analytics producer failed to connect");
+  });
+  AnalyticsConsumerService.start().catch((err: unknown) => {
+    logger.error({ err }, "analytics consumer failed to start");
   });
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -39,6 +50,11 @@ const shutdown = (signal: string): void => {
 
   server?.close(async () => {
     logger.info("http server closed");
+    await disconnectProducer(env.SHUTDOWN_TIMEOUT_MS);
+    await disconnectConsumer(env.SHUTDOWN_TIMEOUT_MS);
+    await clickhouseClient.close().catch((err: unknown) => {
+      logger.error({ err }, "clickhouse client close failed");
+    });
     await closePostgres();
     clearTimeout(forceExitTimer);
     process.exit(0);
