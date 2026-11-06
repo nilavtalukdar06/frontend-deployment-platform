@@ -12,6 +12,7 @@ services:
       AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://host.docker.internal:4000}
       PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-http://host.docker.internal:4001}
       REALTIME_SERVICE_URL: ${REALTIME_SERVICE_URL:-http://host.docker.internal:4003}
+      ANALYTICS_SERVICE_URL: ${ANALYTICS_SERVICE_URL:-http://host.docker.internal:4004}
       REDIS_URL: ${REDIS_URL:-redis://host.docker.internal:6379}
     extra_hosts:
       - "host.docker.internal:host-gateway"

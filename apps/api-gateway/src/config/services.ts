@@ -19,3 +19,8 @@ export const realtimeService: UpstreamService = {
   name: "realtime-service",
   url: env.REALTIME_SERVICE_URL,
 };
+
+export const analyticsService: UpstreamService = {
+  name: "analytics-service",
+  url: env.ANALYTICS_SERVICE_URL,
+};

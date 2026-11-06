@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { analyticsRouter } from "./analytics.route";
 import { authRouter } from "./auth.route";
 import { deploymentRouter } from "./deployment.route";
 import { docsRouter } from "./docs.route";
@@ -13,6 +14,7 @@ router.use(docsRouter);
 router.use(healthRouter);
 router.use(authRouter);
 router.use(projectRouter);
+router.use(analyticsRouter);
 router.use(deploymentRouter);
 router.use(realtimeRouter);
 router.use(webhookRouter);

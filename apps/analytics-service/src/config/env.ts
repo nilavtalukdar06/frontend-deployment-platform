@@ -13,6 +13,9 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
+    PORT: z.coerce.number().int().positive().default(4004),
+
+    DATABASE_URL: z.url(),
 
     KAFKA_BROKERS: commaSeparatedList.pipe(z.array(z.string()).min(1)),
     KAFKA_USERNAME: z.string().min(1),
@@ -21,7 +24,7 @@ export const env = createEnv({
       .enum(["scram-sha-256", "scram-sha-512", "plain"])
       .default("scram-sha-256"),
     KAFKA_CA_CERT_PATH: z.string().min(1).default("ca.pem"),
-    KAFKA_CLIENT_ID: z.string().min(1).default("analytics-worker"),
+    KAFKA_CLIENT_ID: z.string().min(1).default("analytics-service"),
     KAFKA_ANALYTICS_TOPIC: z.string().min(1).default("analytics"),
     KAFKA_CONSUMER_GROUP_ID: z.string().min(1).default("analytics-worker"),
     KAFKA_CONSUMER_FROM_BEGINNING: z
@@ -35,6 +38,11 @@ export const env = createEnv({
     CLICKHOUSE_URL: z.url(),
     CLICKHOUSE_USERNAME: z.string().min(1),
     CLICKHOUSE_PASSWORD: z.string().min(1),
+    CLICKHOUSE_REQUEST_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10_000),
 
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
   },

@@ -17,6 +17,10 @@ const AuthServiceMessage = {
   CURRENT_USER: "Current user retrieved successfully",
 } as const;
 
+const AnalyticsServiceMessage = {
+  ANALYTICS_RETRIEVED: "Project analytics retrieved successfully",
+} as const;
+
 const ProjectServiceMessage = {
   PROJECT_NOT_FOUND: "The requested project could not be found",
   INVALID_REPOSITORY:
@@ -814,6 +818,157 @@ const schemas: Record<string, JsonObject> = {
         required: ["data"],
         properties: {
           data: { $ref: "#/components/schemas/AccessTokenPayload" },
+        },
+      },
+    ],
+  },
+  HourlyViewsPoint: {
+    type: "object",
+    required: ["hour", "views"],
+    properties: {
+      hour: {
+        type: "string",
+        format: "date-time",
+        description: "Start of the UTC hour.",
+        example: "2026-11-07T10:00:00.000Z",
+      },
+      views: { type: "integer", minimum: 0, example: 42 },
+    },
+  },
+  RouteSlice: {
+    type: "object",
+    required: ["route", "views", "percentage"],
+    properties: {
+      route: {
+        type: "string",
+        description:
+          "Path of the page, always starting with `/` and without a trailing slash (except `/`). The slice that groups every route outside the top 5 is labelled `Other`.",
+        example: "/pricing",
+      },
+      views: { type: "integer", minimum: 0, example: 120 },
+      percentage: {
+        type: "number",
+        minimum: 0,
+        maximum: 100,
+        description:
+          "Share of the views in the range, rounded to one decimal. `0` when the range has no views.",
+        example: 37.5,
+      },
+    },
+  },
+  ProjectAnalytics: {
+    type: "object",
+    required: [
+      "projectId",
+      "range",
+      "from",
+      "to",
+      "stats",
+      "viewsPerHour",
+      "routeDistribution",
+    ],
+    properties: {
+      projectId: { type: "string", format: "uuid" },
+      range: {
+        type: "string",
+        enum: ["24h", "7d", "30d"],
+        description: "The requested range.",
+      },
+      from: {
+        type: "string",
+        format: "date-time",
+        description: "Start of the first hour of the range.",
+      },
+      to: {
+        type: "string",
+        format: "date-time",
+        description: "Time the report was computed.",
+      },
+      stats: {
+        type: "object",
+        description: "Values for the status cards.",
+        required: [
+          "totalViews",
+          "uniqueRoutes",
+          "averageViewsPerHour",
+          "peakHour",
+          "topRoute",
+        ],
+        properties: {
+          totalViews: {
+            type: "object",
+            required: ["value", "previousValue", "changePercent"],
+            properties: {
+              value: {
+                type: "integer",
+                minimum: 0,
+                description:
+                  "Page views in the range. Equals the sum of `viewsPerHour`.",
+              },
+              previousValue: {
+                type: "integer",
+                minimum: 0,
+                description:
+                  "Page views in the range of the same length that ends where this one starts.",
+              },
+              changePercent: {
+                type: ["number", "null"],
+                description:
+                  "Change of `value` against `previousValue` in percent, rounded to one decimal. `null` when `previousValue` is `0`.",
+              },
+            },
+          },
+          uniqueRoutes: {
+            type: "integer",
+            minimum: 0,
+            description: "Number of distinct routes viewed in the range.",
+          },
+          averageViewsPerHour: {
+            type: "number",
+            minimum: 0,
+            description:
+              "`totalViews.value` divided by the number of hours in the range, rounded to one decimal.",
+          },
+          peakHour: {
+            oneOf: [
+              { $ref: "#/components/schemas/HourlyViewsPoint" },
+              { type: "null" },
+            ],
+            description:
+              "The hour with the most views (the earliest one on a tie). `null` when the range has no views.",
+          },
+          topRoute: {
+            oneOf: [
+              { $ref: "#/components/schemas/RouteSlice" },
+              { type: "null" },
+            ],
+            description:
+              "The most viewed route. `null` when the range has no views.",
+          },
+        },
+      },
+      viewsPerHour: {
+        type: "array",
+        description:
+          "Data of the bar chart: one entry per UTC hour of the range, oldest first, 24 entries for `24h`, 168 for `7d` and 720 for `30d`. Hours without views are included with `views: 0`.",
+        items: { $ref: "#/components/schemas/HourlyViewsPoint" },
+      },
+      routeDistribution: {
+        type: "array",
+        description:
+          "Data of the donut chart: the 5 most viewed routes, most viewed first, followed by one `Other` slice when more routes were viewed. Empty when the range has no views.",
+        items: { $ref: "#/components/schemas/RouteSlice" },
+      },
+    },
+  },
+  ProjectAnalyticsResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: { $ref: "#/components/schemas/ProjectAnalytics" },
         },
       },
     ],
@@ -1653,6 +1808,71 @@ const getProject: JsonObject = {
   },
 };
 
+const exampleProjectAnalytics = {
+  projectId: "0192f5a4-7b1e-7c3a-9d2e-5f8a1b2c3d4e",
+  range: "24h",
+  from: "2026-11-06T11:00:00.000Z",
+  to: "2026-11-07T10:42:17.000Z",
+  stats: {
+    totalViews: { value: 240, previousValue: 200, changePercent: 20 },
+    uniqueRoutes: 7,
+    averageViewsPerHour: 10,
+    peakHour: { hour: "2026-11-07T09:00:00.000Z", views: 42 },
+    topRoute: { route: "/", views: 120, percentage: 50 },
+  },
+  viewsPerHour: [
+    { hour: "2026-11-06T11:00:00.000Z", views: 3 },
+    { hour: "2026-11-06T12:00:00.000Z", views: 0 },
+    { hour: "2026-11-07T09:00:00.000Z", views: 42 },
+    { hour: "2026-11-07T10:00:00.000Z", views: 18 },
+  ],
+  routeDistribution: [
+    { route: "/", views: 120, percentage: 50 },
+    { route: "/pricing", views: 60, percentage: 25 },
+    { route: "/about", views: 36, percentage: 15 },
+    { route: "Other", views: 24, percentage: 10 },
+  ],
+};
+
+const getProjectAnalytics: JsonObject = {
+  tags: ["Analytics"],
+  operationId: "getProjectAnalytics",
+  summary: "Page analytics of a project",
+  description:
+    "Protected. Proxied to the analytics-service `GET /analytics/projects/{projectId}`. Returns everything needed to draw the analytics dashboard of one of the user's projects in a single call: the values of the status cards (`stats`), the data of the views-per-hour bar chart (`viewsPerHour`) and the data of the route donut chart (`routeDistribution`). A page view is one HTML document served for the project, on its slug URL or on any of its deployment URLs; static assets are not counted and very recent views can appear with a short delay. The range ends with the current UTC hour and is made of whole hours (`24h` is the last 24 hours, `7d` the last 168 and `30d` the last 720); `stats.totalViews.previousValue` covers the range of the same length right before it. Projects of other users and deleted projects are reported as `404`.",
+  security: bearerSecurity,
+  parameters: [
+    {
+      name: "projectId",
+      in: "path",
+      required: true,
+      description: "Identifier of a project owned by the user.",
+      schema: { type: "string", format: "uuid" },
+    },
+    {
+      name: "range",
+      in: "query",
+      required: false,
+      description: "Length of the reported period.",
+      schema: { type: "string", enum: ["24h", "7d", "30d"], default: "24h" },
+    },
+  ],
+  responses: {
+    "200": {
+      description: "The analytics of the project.",
+      content: jsonContent("ProjectAnalyticsResponse", {
+        success: true,
+        statusCode: 200,
+        message: AnalyticsServiceMessage.ANALYTICS_RETRIEVED,
+        data: exampleProjectAnalytics,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": ref("ProjectNotFound"),
+    ...projectProxiedErrorResponses,
+  },
+};
+
 const updateProject: JsonObject = {
   tags: ["Projects"],
   operationId: "updateProject",
@@ -2254,7 +2474,7 @@ export const openApiDocument: JsonObject = {
     title: "API Gateway",
     version: "1.0.0",
     description:
-      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service and routes under `/projects` and `/webhooks` to the project-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, is denied by default without a valid bearer token. Routes under `/webhooks` are public; they are called by GitHub and authenticated upstream by the webhook signature. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service relies on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` (or `MAX_WEBHOOK_BODY_BYTES` under `/webhooks`) are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
+      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service, routes under `/projects` and `/webhooks` to the project-service and routes under `/analytics` to the analytics-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects` and `/analytics`, is denied by default without a valid bearer token. Routes under `/webhooks` are public; they are called by GitHub and authenticated upstream by the webhook signature. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service and the analytics-service rely on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` (or `MAX_WEBHOOK_BODY_BYTES` under `/webhooks`) are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
@@ -2281,6 +2501,11 @@ export const openApiDocument: JsonObject = {
       name: "Environment variables",
       description:
         "Encrypted per-project variables passed to the install and build commands of each deployment, proxied to the project-service. All routes require a bearer token.",
+    },
+    {
+      name: "Analytics",
+      description:
+        "Page view statistics of a project (status cards, views per hour and route distribution), proxied to the analytics-service. All routes require a bearer token.",
     },
     {
       name: "Realtime",
@@ -2322,6 +2547,7 @@ export const openApiDocument: JsonObject = {
       put: setEnvironmentVariable,
       delete: deleteEnvironmentVariable,
     },
+    "/analytics/projects/{projectId}": { get: getProjectAnalytics },
     "/socket.io/": { get: realtimeSocket },
     "/webhooks/github/projects/{projectId}": { post: githubWebhook },
   },
