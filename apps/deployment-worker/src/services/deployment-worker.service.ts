@@ -3,7 +3,7 @@ import { env } from "../config/env";
 import {
   DEPLOYMENT_JOB_ATTEMPTS,
   type DeploymentJobData,
-} from "../constants/queue";
+} from "@repo/contracts";
 import { logger } from "../lib/logger";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 import {

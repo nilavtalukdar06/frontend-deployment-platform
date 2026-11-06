@@ -6,7 +6,7 @@ import { PageViewRepository } from "../repositories/page-view.repository";
 import {
   pageViewEventSchema,
   type PageViewEventPayload,
-} from "../schemas/page-view-event.schema";
+} from "@repo/contracts/events";
 
 const logger = rootLogger.child({ component: "analytics-consumer" });
 

@@ -3,8 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { authService, projectService } from "../config/services";
 import { checkRedisConnection } from "../lib/redis";
 import { checkServiceHealth } from "../lib/service-health";
-import { ApiResponse } from "../utils/api-response";
-import { asyncHandler } from "../utils/async-handler";
+import { ApiResponse, asyncHandler } from "@repo/http";
 import {
   SuccessMessage,
   ErrorMessage,

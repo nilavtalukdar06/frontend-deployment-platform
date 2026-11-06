@@ -7,7 +7,7 @@ import {
   type Deployment,
   type NewProject,
   type Project,
-} from "../db/schema";
+} from "@repo/db";
 
 export type ProjectChanges = Partial<
   Omit<

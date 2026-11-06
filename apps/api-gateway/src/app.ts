@@ -1,10 +1,12 @@
 import express, { type Application } from "express";
 import { bodyLimit } from "./middlewares/body-limit.middleware";
 import { corsMiddleware } from "./middlewares/cors.middleware";
-import { applySecurityMiddlewares } from "./middlewares/security.middleware";
+import {
+  applySecurityMiddlewares,
+  notFoundHandler,
+} from "@repo/http/middlewares";
 import { rateLimiter } from "./middlewares/rate-limit.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
-import { notFoundHandler } from "./middlewares/not-found.middleware";
 import { globalErrorHandler } from "./middlewares/error-handler.middleware";
 import { router } from "./routes";
 

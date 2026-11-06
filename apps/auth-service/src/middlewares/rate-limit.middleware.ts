@@ -3,7 +3,7 @@ import { RedisStore, type RedisReply } from "rate-limit-redis";
 import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
 import { redisClient } from "../lib/redis";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 

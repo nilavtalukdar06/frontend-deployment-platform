@@ -6,8 +6,7 @@ import {
   SuccessMessage,
 } from "../constants/response-message.enum";
 import { EnvironmentVariableService } from "../services/environment-variable.service";
-import { ApiError } from "../utils/api-error";
-import { ApiResponse } from "../utils/api-response";
+import { ApiError, ApiResponse } from "@repo/http";
 
 export abstract class EnvironmentVariableController {
   static async list(req: Request, res: Response): Promise<void> {

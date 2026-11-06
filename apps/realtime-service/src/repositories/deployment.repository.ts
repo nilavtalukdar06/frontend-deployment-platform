@@ -1,5 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { deployments, projects } from "../db/schema";
+import { deployments, projects } from "@repo/db";
 import { db } from "../lib/postgres";
 
 export interface OwnedDeployment {

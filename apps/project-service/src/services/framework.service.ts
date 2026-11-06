@@ -2,12 +2,12 @@ import { frameworkList } from "@vercel/frameworks";
 import { detectFramework } from "@vercel/fs-detectors";
 import { StatusCodes } from "http-status-codes";
 import { ErrorCode } from "../constants/error-code.enum";
-import { RedisKeys } from "../constants/redis-keys";
+import { RedisKeys } from "@repo/contracts";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { GithubFilesystem } from "../lib/github-filesystem";
 import { logger } from "../lib/logger";
 import { redisClient } from "../lib/redis";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import type { GithubRepository, GithubRepositoryRef } from "./github.service";
 
 export interface FrameworkSource {

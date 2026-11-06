@@ -2,7 +2,7 @@ import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
 import { Queue } from "bullmq";
-import { DEPLOYMENT_QUEUE_NAME } from "../constants/queue";
+import { DEPLOYMENT_QUEUE_NAME } from "@repo/contracts";
 import { createBullConnection } from "./redis";
 
 const deploymentQueue = new Queue(DEPLOYMENT_QUEUE_NAME, {

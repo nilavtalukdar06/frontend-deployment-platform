@@ -5,7 +5,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
 import { isWebhookRoute } from "../config/webhook-routes";
 import { redisClient } from "../lib/redis";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 

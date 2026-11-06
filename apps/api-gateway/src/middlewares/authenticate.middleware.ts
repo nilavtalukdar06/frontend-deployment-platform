@@ -9,7 +9,7 @@ import {
   TokenService,
   type AccessTokenClaims,
 } from "../services/token.service";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 
 export abstract class AuthenticateMiddleware {
   static handle(req: Request, _res: Response, next: NextFunction): void {

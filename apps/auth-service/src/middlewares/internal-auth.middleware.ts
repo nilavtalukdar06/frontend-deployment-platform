@@ -4,7 +4,7 @@ import { StatusCodes } from "http-status-codes";
 import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 
 const INTERNAL_API_KEY_HEADER = "x-internal-api-key";
 

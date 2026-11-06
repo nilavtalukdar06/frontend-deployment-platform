@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { clickhouseClient } from "../db/clickhouse";
-import type { PageViewEventPayload } from "../schemas/page-view-event.schema";
+import type { PageViewEventPayload } from "@repo/contracts/events";
 
 const PAGE_VIEWS_TABLE = "page_views";
 

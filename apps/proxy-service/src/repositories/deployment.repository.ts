@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import { deployments, projects } from "../db/schema";
+import { deployments, projects } from "@repo/db";
 
 export abstract class DeploymentRepository {
   static async findReadyDeploymentId(

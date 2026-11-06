@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { logger } from "./logger";
 
 const githubTokenResponseSchema = z.object({

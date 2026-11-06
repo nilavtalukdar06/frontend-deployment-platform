@@ -30,7 +30,11 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@repo/contracts": "workspace:*",
     "@repo/eslint-config": "workspace:*",
+    "@repo/http": "workspace:*",
+    "@repo/logger": "workspace:*",
+    "@repo/redis": "workspace:*",
     "@repo/tsconfig": "workspace:*",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",

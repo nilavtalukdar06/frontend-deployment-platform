@@ -1,16 +1,12 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
+import {
+  DEPLOYMENT_JOB_ATTEMPTS,
+  DEPLOYMENT_QUEUE_NAME,
+  type DeploymentJobData,
+} from "@repo/contracts";
 import { env } from "../config/env";
 import { logger } from "./logger";
-
-export const DEPLOYMENT_QUEUE_NAME = "deployments";
-
-export interface DeploymentJobData {
-  deploymentId: string;
-  userId: string;
-}
-
-const DEPLOYMENT_JOB_ATTEMPTS = 3;
 
 const createBullConnection = (): Redis => {
   const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

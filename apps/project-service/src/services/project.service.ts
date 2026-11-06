@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { StatusCodes } from "http-status-codes";
-import type { Deployment, Project } from "../db/schema";
+import type { Deployment, Project } from "@repo/db";
 import { env } from "../config/env";
 import { ErrorCode } from "../constants/error-code.enum";
 import {
@@ -21,10 +21,10 @@ import {
   type ProjectChanges,
 } from "../repositories/project.repository";
 import { DeploymentRepository } from "../repositories/deployment.repository";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { FrameworkService } from "./framework.service";
 import { AuthServiceClient } from "../lib/auth-service-client";
-import { mapWithConcurrency } from "../utils/map-with-concurrency";
+import { mapWithConcurrency } from "@repo/utils";
 import { SecretCipher } from "../utils/secret-cipher";
 import { logger } from "../lib/logger";
 import { DeploymentLockService } from "./deployment-lock.service";

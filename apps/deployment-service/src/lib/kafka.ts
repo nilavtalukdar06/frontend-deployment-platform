@@ -1,65 +1,28 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { KafkaJS } from "@confluentinc/kafka-javascript";
+import { createKafka, createKafkaLogger, KafkaJS } from "@repo/kafka";
+import { withTimeout } from "@repo/utils";
 import { env } from "../config/env";
-import { logger as rootLogger } from "./logger";
-import { withTimeout } from "../utils/with-timeout";
+import { logger } from "./logger";
 
 export type KafkaProducer = KafkaJS.Producer;
 
-const kafkaLogger = rootLogger.child({ component: "kafka" });
-
-const createPinoKafkaLogger = (
-  bindings: Record<string, unknown> = {},
-): KafkaJS.Logger => {
-  const child = kafkaLogger.child(bindings);
-
-  return {
-    info: (message, extra) => child.debug(extra ?? {}, message),
-    debug: (message, extra) => child.trace(extra ?? {}, message),
-    warn: (message, extra) => child.warn(extra ?? {}, message),
-    error: (message, extra) => child.error(extra ?? {}, message),
-    namespace: (namespace) => createPinoKafkaLogger({ ...bindings, namespace }),
-    setLogLevel: () => undefined,
-  };
-};
-
-const resolveCaCertificatePath = (): string => {
-  const caPath = path.resolve(env.KAFKA_CA_CERT_PATH);
-
-  if (!existsSync(caPath)) {
-    throw new Error(`kafka ca certificate not found at "${caPath}"`);
-  }
-
-  return caPath;
-};
+const kafkaLogger = createKafkaLogger(logger);
 
 const connectTimeoutMs = 20_000;
 
 let producer: KafkaProducer | undefined;
 
-const createProducer = (): KafkaProducer => {
-  const kafka = new KafkaJS.Kafka({
-    kafkaJS: {
+const createProducer = (): KafkaProducer =>
+  createKafka(
+    {
       clientId: env.KAFKA_CLIENT_ID,
       brokers: env.KAFKA_BROKERS,
-      ssl: true,
-      sasl: {
-        mechanism: env.KAFKA_SASL_MECHANISM,
-        username: env.KAFKA_USERNAME,
-        password: env.KAFKA_PASSWORD,
-      },
-      connectionTimeout: 10_000,
-      authenticationTimeout: 10_000,
-      requestTimeout: 30_000,
-      logger: createPinoKafkaLogger(),
-      logLevel: KafkaJS.logLevel.INFO,
+      saslMechanism: env.KAFKA_SASL_MECHANISM,
+      username: env.KAFKA_USERNAME,
+      password: env.KAFKA_PASSWORD,
+      caCertPath: env.KAFKA_CA_CERT_PATH,
     },
-    "ssl.ca.location": resolveCaCertificatePath(),
-    "ssl.endpoint.identification.algorithm": "https",
-  });
-
-  return kafka.producer({
+    kafkaLogger,
+  ).producer({
     kafkaJS: {
       idempotent: true,
       acks: -1,
@@ -75,7 +38,6 @@ const createProducer = (): KafkaProducer => {
     "retry.backoff.max.ms": 2_000,
     "queue.buffering.max.messages": 100_000,
   });
-};
 
 export const connectProducer = async (): Promise<KafkaProducer> => {
   if (producer) {

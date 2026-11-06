@@ -1,18 +1,7 @@
-import pino from "pino";
+import { createLogger } from "@repo/logger";
 import { env } from "../config/env";
 
-export const logger = pino({
+export const logger = createLogger({
   level: env.LOG_LEVEL,
-  transport:
-    env.NODE_ENV === "development"
-      ? {
-          target: "pino-pretty",
-          options: {
-            colorize: true,
-            translateTime: "SYS:standard",
-            ignore: "pid,hostname",
-          },
-        }
-      : undefined,
-  base: env.NODE_ENV === "production" ? undefined : { pid: process.pid },
+  nodeEnv: env.NODE_ENV,
 });

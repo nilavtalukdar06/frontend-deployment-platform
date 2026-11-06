@@ -2,8 +2,7 @@ import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { checkPostgresConnection } from "../lib/postgres";
 import { checkRedisConnection } from "../lib/redis";
-import { ApiResponse } from "../utils/api-response";
-import { asyncHandler } from "../utils/async-handler";
+import { ApiResponse, asyncHandler } from "@repo/http";
 import {
   SuccessMessage,
   ErrorMessage,

@@ -9,8 +9,7 @@ import {
 import { AuthenticateMiddleware } from "../middlewares/authenticate.middleware";
 import { AuthService, type TokenPair } from "../services/auth.service";
 import { GithubOauthService } from "../services/github-oauth.service";
-import { ApiError } from "../utils/api-error";
-import { ApiResponse } from "../utils/api-response";
+import { ApiError, ApiResponse } from "@repo/http";
 
 const REFRESH_COOKIE_NAME = "refresh_token";
 const REFRESH_COOKIE_PATH = "/auth";
@@ -152,7 +151,7 @@ export abstract class AuthController {
     return { ...AuthController.cookieOptions(), sameSite: "lax" };
   }
 
-  private static frontendCallbackUrl(errorCode?: ErrorCode): string {
+  private static frontendCallbackUrl(errorCode?: string): string {
     const url = new URL(FRONTEND_CALLBACK_PATH, env.FRONTEND_URL);
 
     if (errorCode) {

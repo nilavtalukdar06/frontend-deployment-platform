@@ -1,11 +1,6 @@
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import {
-  deployments,
-  projects,
-  type Deployment,
-  type Project,
-} from "../db/schema";
+import { deployments, projects, type Deployment, type Project } from "@repo/db";
 
 export type DeploymentTrigger = Deployment["trigger"];
 

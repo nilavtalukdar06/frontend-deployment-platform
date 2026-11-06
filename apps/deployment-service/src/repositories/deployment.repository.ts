@@ -6,7 +6,7 @@ import {
   projects,
   type Deployment,
   type Project,
-} from "../db/schema";
+} from "@repo/db";
 
 export type DeploymentStatus = Deployment["status"];
 

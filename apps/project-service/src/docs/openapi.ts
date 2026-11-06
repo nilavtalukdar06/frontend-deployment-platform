@@ -7,7 +7,7 @@ import {
   deploymentStatuses,
   deploymentTriggers,
   projectFrameworks,
-} from "../db/schema";
+} from "@repo/db";
 import { packageManagers } from "../constants/package-manager";
 import { runtimes } from "../constants/runtime";
 import {

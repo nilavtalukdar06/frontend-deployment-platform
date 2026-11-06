@@ -1,7 +1,5 @@
-import {
-  deploymentQueue,
-  type DeploymentJobData,
-} from "../lib/deployment-queue";
+import type { DeploymentJobData } from "@repo/contracts";
+import { deploymentQueue } from "../lib/deployment-queue";
 import { logger } from "../lib/logger";
 import { DeploymentRepository } from "../repositories/deployment.repository";
 

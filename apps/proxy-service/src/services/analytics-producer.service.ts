@@ -1,7 +1,7 @@
 import { env } from "../config/env";
 import { connectProducer } from "../lib/kafka";
 import { logger as rootLogger } from "../lib/logger";
-import type { PageViewEventPayload } from "../schemas/page-view-event.schema";
+import type { PageViewEventPayload } from "@repo/contracts/events";
 
 const logger = rootLogger.child({ component: "analytics-producer" });
 

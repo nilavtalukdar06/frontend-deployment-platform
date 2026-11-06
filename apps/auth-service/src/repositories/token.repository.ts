@@ -1,5 +1,5 @@
 import { redisClient } from "../lib/redis";
-import { RedisKeys } from "../constants/redis-keys";
+import { RedisKeys } from "@repo/contracts";
 
 const ROTATE_REFRESH_SCRIPT = `
 local current = redis.call("GET", KEYS[1])

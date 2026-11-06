@@ -1,10 +1,10 @@
 import { StatusCodes } from "http-status-codes";
-import type { ProjectEnvironmentVariable } from "../db/schema";
+import type { ProjectEnvironmentVariable } from "@repo/db";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { EnvironmentVariableRepository } from "../repositories/environment-variable.repository";
 import { ProjectRepository } from "../repositories/project.repository";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { SecretCipher } from "../utils/secret-cipher";
 import { MAX_ENVIRONMENT_VARIABLES } from "../validators/project.validator";
 import { ProjectService } from "./project.service";

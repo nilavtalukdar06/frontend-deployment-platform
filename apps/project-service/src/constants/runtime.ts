@@ -2,10 +2,9 @@ import {
   PACKAGE_MANAGER_PRESETS,
   type PackageManager,
 } from "./package-manager";
+import type { Runtime } from "@repo/db";
 
-export const runtimes = ["node", "bun"] as const;
-
-export type Runtime = (typeof runtimes)[number];
+export { runtimes, type Runtime } from "@repo/db";
 
 /**
  * Runtimes that execute a project's build. The package manager installs

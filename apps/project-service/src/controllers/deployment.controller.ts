@@ -6,8 +6,7 @@ import {
   SuccessMessage,
 } from "../constants/response-message.enum";
 import { DeploymentLogService } from "../services/deployment-log.service";
-import { ApiError } from "../utils/api-error";
-import { ApiResponse } from "../utils/api-response";
+import { ApiError, ApiResponse } from "@repo/http";
 
 export abstract class DeploymentController {
   static async listLogs(req: Request, res: Response): Promise<void> {

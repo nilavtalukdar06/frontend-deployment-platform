@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { SuccessMessage } from "../constants/response-message.enum";
 import { AuthService } from "../services/auth.service";
-import { ApiResponse } from "../utils/api-response";
+import { ApiResponse } from "@repo/http";
 
 export abstract class InternalController {
   static async githubToken(req: Request, res: Response): Promise<void> {

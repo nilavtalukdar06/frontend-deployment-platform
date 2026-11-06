@@ -1,4 +1,4 @@
-import { RedisKeys } from "../constants/redis-keys";
+import { RedisKeys } from "@repo/contracts";
 import { redisClient } from "../lib/redis";
 
 const RELEASE_IF_OWNER_SCRIPT = `

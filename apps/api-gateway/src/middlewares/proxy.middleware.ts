@@ -10,7 +10,7 @@ import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
 import { logger } from "../lib/logger";
 import type { AccessTokenClaims } from "../services/token.service";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { payloadTooLargeError } from "./body-limit.middleware";
 
 type TrackedRequest = IncomingMessage & {

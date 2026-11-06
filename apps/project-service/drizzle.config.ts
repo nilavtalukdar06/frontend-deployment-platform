@@ -11,7 +11,7 @@ if (!pooledUrl || !directUrl) {
 
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/db/schema/index.ts",
+  schema: "../../packages/db/src/schema/index.ts",
   out: "./drizzle",
   migrations: { table: "__drizzle_migrations_project_service" },
   casing: "snake_case",

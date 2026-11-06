@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../lib/postgres";
-import { deployments, projects, type Deployment } from "../db/schema";
+import { deployments, projects, type Deployment } from "@repo/db";
 
 const errorMessageMaxLength = 1000;
 

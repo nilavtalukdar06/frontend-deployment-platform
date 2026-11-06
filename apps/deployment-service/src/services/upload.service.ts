@@ -11,7 +11,7 @@ import { s3 } from "../lib/s3";
 import type { DeploymentLogCollector } from "../logging/deployment-log-collector";
 import { DeploymentError } from "../utils/deployment-error";
 import { formatDuration } from "../utils/format-duration";
-import { mapWithConcurrency } from "../utils/map-with-concurrency";
+import { mapWithConcurrency } from "@repo/utils";
 
 const perFileLogLimit = 25;
 

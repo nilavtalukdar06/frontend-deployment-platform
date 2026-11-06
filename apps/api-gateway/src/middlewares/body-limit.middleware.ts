@@ -4,7 +4,7 @@ import { env } from "../config/env";
 import { isWebhookRoute } from "../config/webhook-routes";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 
 export const payloadTooLargeError = (
   maxBytes: number = env.MAX_REQUEST_BODY_BYTES,

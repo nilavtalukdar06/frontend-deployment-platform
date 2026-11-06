@@ -1,6 +1,6 @@
-export const packageManagers = ["npm", "pnpm", "yarn", "bun"] as const;
+import type { PackageManager } from "@repo/db";
 
-export type PackageManager = (typeof packageManagers)[number];
+export { packageManagers, type PackageManager } from "@repo/db";
 
 export const DEFAULT_PACKAGE_MANAGER: PackageManager = "npm";
 

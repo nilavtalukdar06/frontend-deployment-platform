@@ -1,10 +1,7 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import { env } from "./config/env";
-import {
-  DEPLOYMENT_QUEUE_NAME,
-  type DeploymentJobData,
-} from "./constants/queue";
+import { DEPLOYMENT_QUEUE_NAME, type DeploymentJobData } from "@repo/contracts";
 import { logger } from "./lib/logger";
 import { pgPool } from "./lib/postgres";
 import { createBullConnection, redisClient } from "./lib/redis";

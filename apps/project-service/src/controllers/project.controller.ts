@@ -10,8 +10,7 @@ import {
   type CreateProjectInput,
 } from "../services/project.service";
 import type { ProjectChanges } from "../repositories/project.repository";
-import { ApiError } from "../utils/api-error";
-import { ApiResponse } from "../utils/api-response";
+import { ApiError, ApiResponse } from "@repo/http";
 
 export abstract class ProjectController {
   static async create(req: Request, res: Response): Promise<void> {

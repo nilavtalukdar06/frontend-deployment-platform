@@ -9,7 +9,7 @@ import {
   TokenRepository,
 } from "../repositories/token.repository";
 import { UserRepository } from "../repositories/user.repository";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 import { TokenCipher } from "../utils/token-cipher";
 import { GithubOauthService } from "./github-oauth.service";
 import { TokenService, type IssuedToken } from "./token.service";

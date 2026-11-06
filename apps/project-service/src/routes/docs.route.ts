@@ -1,18 +1,7 @@
-import { Router } from "express";
-import swaggerUi from "swagger-ui-express";
+import { createDocsRouter } from "@repo/http/docs";
 import { openApiDocument } from "../docs/openapi";
 
-export const docsRouter = Router();
-
-docsRouter.get("/docs.json", (_req, res) => {
-  res.json(openApiDocument);
+export const docsRouter = createDocsRouter(openApiDocument, {
+  title: "Project Service API",
+  persistAuthorization: true,
 });
-
-docsRouter.use(
-  "/docs",
-  swaggerUi.serve,
-  swaggerUi.setup(openApiDocument, {
-    customSiteTitle: "Project Service API",
-    swaggerOptions: { persistAuthorization: true },
-  }),
-);

@@ -3,7 +3,7 @@ import { db } from "../lib/postgres";
 import {
   projectEnvironmentVariables,
   type ProjectEnvironmentVariable,
-} from "../db/schema";
+} from "@repo/db";
 
 export abstract class EnvironmentVariableRepository {
   static async listByProject(

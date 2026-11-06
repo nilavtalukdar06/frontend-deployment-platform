@@ -1,0 +1,4 @@
+{
+  "extends": "@repo/tsconfig/node-esm.json",
+  "include": ["src"]
+}

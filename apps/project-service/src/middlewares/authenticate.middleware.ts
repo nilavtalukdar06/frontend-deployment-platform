@@ -3,7 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
 import { ErrorCode } from "../constants/error-code.enum";
 import { ErrorMessage } from "../constants/response-message.enum";
-import { ApiError } from "../utils/api-error";
+import { ApiError } from "@repo/http";
 
 export interface AuthenticatedUser {
   id: string;

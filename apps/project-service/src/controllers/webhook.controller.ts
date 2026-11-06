@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { SuccessMessage } from "../constants/response-message.enum";
 import { WebhookService } from "../services/webhook.service";
-import { ApiResponse } from "../utils/api-response";
+import { ApiResponse } from "@repo/http";
 
 const headerValue = (req: Request, name: string): string | undefined => {
   const value = req.headers[name];

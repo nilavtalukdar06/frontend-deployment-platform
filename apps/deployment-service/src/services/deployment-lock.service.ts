@@ -1,4 +1,4 @@
-import { RedisKeys } from "../constants/redis-keys";
+import { RedisKeys } from "@repo/contracts";
 import { logger } from "../lib/logger";
 import { createRedisClient } from "../lib/redis";
 
