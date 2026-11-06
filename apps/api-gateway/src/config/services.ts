@@ -24,3 +24,8 @@ export const analyticsService: UpstreamService = {
   name: "analytics-service",
   url: env.ANALYTICS_SERVICE_URL,
 };
+
+export const logsService: UpstreamService = {
+  name: "logs-service",
+  url: env.LOGS_SERVICE_URL,
+};

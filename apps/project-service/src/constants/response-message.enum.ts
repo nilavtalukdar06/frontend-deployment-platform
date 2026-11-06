@@ -13,7 +13,6 @@ export enum SuccessMessage {
   DEPLOYMENTS_RETRIEVED = "Deployments retrieved successfully",
   DEPLOYMENT_RETRIEVED = "Deployment retrieved successfully",
   DEPLOYMENT_CANCELED = "Deployment canceled successfully",
-  DEPLOYMENT_LOGS_RETRIEVED = "Deployment logs retrieved successfully",
   REPOSITORIES_RETRIEVED = "Repositories retrieved successfully",
   ENVIRONMENT_VARIABLES_RETRIEVED = "Environment variables retrieved successfully",
   ENVIRONMENT_VARIABLE_SAVED = "Environment variable saved successfully",

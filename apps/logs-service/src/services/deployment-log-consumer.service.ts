@@ -84,7 +84,7 @@ export const DeploymentLogConsumerService = {
         topic: env.KAFKA_DEPLOYMENT_LOGS_TOPIC,
         groupId: env.KAFKA_CONSUMER_GROUP_ID,
       },
-      "log-worker ready",
+      "logs-service ready",
     );
   },
 };

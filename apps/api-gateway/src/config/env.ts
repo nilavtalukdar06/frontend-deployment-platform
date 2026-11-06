@@ -12,6 +12,7 @@ export const env = createEnv({
     PROJECT_SERVICE_URL: z.string().url().default("http://localhost:4001"),
     REALTIME_SERVICE_URL: z.string().url().default("http://localhost:4003"),
     ANALYTICS_SERVICE_URL: z.string().url().default("http://localhost:4004"),
+    LOGS_SERVICE_URL: z.string().url().default("http://localhost:4005"),
 
     REDIS_URL: z.string().url(),
 

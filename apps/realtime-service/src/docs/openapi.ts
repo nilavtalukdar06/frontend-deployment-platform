@@ -42,7 +42,7 @@ The token is verified exactly as the api-gateway does (signature, issuer, audien
 - \`deployment:log\`: one log event, see the \`DeploymentLogMessage\` schema. Events of a deployment are emitted in order, and \`sequence\` is unique per deployment.
 - \`auth:expired\`: the access token expired, the connection is about to be closed.
 
-**History and gaps.** Only events produced while the client is subscribed are delivered; nothing is replayed. To show a deployment's full output, subscribe first, then load the history with \`GET /deployment/{id}/logs\` (project-service, see the api-gateway documentation), and merge the two by \`sequence\`, dropping events already shown. Delivery is at-least-once, so an event can arrive twice; \`sequence\` is the de-duplication key. The final event of a deployment has \`type\` \`end\`.`;
+**History and gaps.** Only events produced while the client is subscribed are delivered; nothing is replayed. To show a deployment's full output, subscribe first, then load the history with \`GET /deployment/{id}/logs\` (logs-service, see the api-gateway documentation), and merge the two by \`sequence\`, dropping events already shown. Delivery is at-least-once, so an event can arrive twice; \`sequence\` is the de-duplication key. The final event of a deployment has \`type\` \`end\`.`;
 
 const logMessageSchema: JsonObject = {
   type: "object",

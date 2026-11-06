@@ -6,11 +6,11 @@ RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages ./packages
-COPY apps/log-worker ./apps/log-worker
+COPY apps/logs-service ./apps/logs-service
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter log-worker...
-RUN pnpm --filter log-worker build
-RUN pnpm --filter log-worker deploy --prod --legacy /prod/log-worker
+    pnpm install --frozen-lockfile --filter logs-service...
+RUN pnpm --filter logs-service build
+RUN pnpm --filter logs-service deploy --prod --legacy /prod/logs-service
 
 FROM node:22-bookworm-slim AS runner
 ENV NODE_ENV=production
@@ -20,13 +20,15 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build --chown=node:node /prod/log-worker/dist ./dist
-COPY --from=build --chown=node:node /prod/log-worker/node_modules ./node_modules
-COPY --from=build --chown=node:node /prod/log-worker/package.json ./package.json
-COPY --chown=node:node apps/log-worker/ca.pem ./ca.pem
+COPY --from=build --chown=node:node /prod/logs-service/dist ./dist
+COPY --from=build --chown=node:node /prod/logs-service/node_modules ./node_modules
+COPY --from=build --chown=node:node /prod/logs-service/package.json ./package.json
+COPY --chown=node:node apps/logs-service/ca.pem ./ca.pem
 ENV KAFKA_CA_CERT_PATH=/app/ca.pem
 
 USER node
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
+EXPOSE 4005
+
 CMD ["node", "dist/index.js"]

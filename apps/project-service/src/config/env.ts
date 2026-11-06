@@ -29,15 +29,6 @@ export const env = createEnv({
 
     S3_BUCKET_NAME: z.string().min(1),
 
-    CLICKHOUSE_URL: z.url(),
-    CLICKHOUSE_USERNAME: z.string().min(1),
-    CLICKHOUSE_PASSWORD: z.string().min(1),
-    CLICKHOUSE_REQUEST_TIMEOUT_MS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(10_000),
-
     SITES_BASE_URL: z
       .string()
       .url()

@@ -1,7 +1,6 @@
 import type { Server } from "node:http";
 import { createApp } from "./app";
 import { env } from "./config/env";
-import { clickhouseClient } from "./lib/clickhouse";
 import { logger } from "./lib/logger";
 import { pgPool } from "./lib/postgres";
 import { closeDeploymentQueue } from "./lib/deployment-queue";
@@ -48,9 +47,8 @@ const shutdown = (signal: string): void => {
         pgPool.end(),
         redisClient.quit(),
         closeDeploymentQueue(),
-        clickhouseClient.close(),
       ]);
-      logger.info("postgres, redis and clickhouse connections closed");
+      logger.info("postgres and redis connections closed");
       clearTimeout(forceExitTimer);
       process.exit(0);
     } catch (err) {
