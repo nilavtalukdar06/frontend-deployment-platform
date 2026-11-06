@@ -6,7 +6,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
-import { StatusDot } from "@/components/deploy/status-dot";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 function SidebarSearch() {
   return (
@@ -53,26 +61,19 @@ function SidebarUser() {
 
 function AppSidebar({ children }: { children: ReactNode }) {
   return (
-    <aside
-      data-slot="sidebar"
-      className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r border-border bg-sidebar lg:flex"
-    >
-      <div className="flex h-15.25 shrink-0 items-center gap-3 border-b border-border px-5">
+    <Sidebar className="border-r border-border bg-sidebar">
+      <SidebarHeader className="h-15.25 shrink-0 flex-row items-center gap-3 border-b border-border px-5">
         <VercelLogo className="h-4 w-4.5 text-foreground" />
         <span className="text-title font-medium">Deploy</span>
-      </div>
-      <div className="flex flex-col gap-4 p-3">
+      </SidebarHeader>
+      <SidebarContent className="gap-4 p-3">
         <SidebarSearch />
         <nav className="flex flex-col">{children}</nav>
-      </div>
-      <div className="mt-auto flex flex-col gap-3 border-t border-border p-3">
-        <div className="flex items-center gap-2 px-1 text-xs text-subtle">
-          <StatusDot status="ready" className="size-1.5" />
-          All systems normal
-        </div>
+      </SidebarContent>
+      <SidebarFooter className="p-3">
         <SidebarUser />
-      </div>
-    </aside>
+      </SidebarFooter>
+    </Sidebar>
   );
 }
 
@@ -83,6 +84,7 @@ function AppHeader({ title }: { title: ReactNode }) {
       className="sticky top-0 z-20 flex h-15.25 shrink-0 items-center justify-between border-b border-border bg-background/85 px-6 backdrop-blur"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
+        <SidebarTrigger className="-ml-1 md:hidden" />
         {title}
         <ChevronsUpDown className="size-3.5 text-subtle" />
       </div>
@@ -104,13 +106,13 @@ function AppShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-svh bg-background text-foreground">
+    <SidebarProvider className="bg-background text-foreground">
       <AppSidebar>{nav}</AppSidebar>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <SidebarInset>
         <AppHeader title={title} />
-        <main className="px-6 py-8 sm:px-8">{children}</main>
-      </div>
-    </div>
+        <div className="px-6 py-8 sm:px-8">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
