@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --filter=!deployment-service",
+    "dev": "turbo run dev --filter=!deployment-service --concurrency=15",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
