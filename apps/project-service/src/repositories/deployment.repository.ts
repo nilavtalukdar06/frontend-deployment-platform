@@ -108,6 +108,26 @@ export abstract class DeploymentRepository {
     return deployment;
   }
 
+  static async findByIdForUser(
+    id: string,
+    userId: string,
+  ): Promise<Deployment | undefined> {
+    const [row] = await db
+      .select({ deployment: deployments })
+      .from(deployments)
+      .innerJoin(projects, eq(projects.id, deployments.projectId))
+      .where(
+        and(
+          eq(deployments.id, id),
+          eq(projects.userId, userId),
+          isNull(projects.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return row?.deployment;
+  }
+
   static async markCanceled(
     id: string,
     projectId: string,

@@ -2,44 +2,73 @@ import type { KafkaJS } from "@confluentinc/kafka-javascript";
 import { env } from "../config/env";
 import { connectConsumer } from "../lib/kafka";
 import { logger as rootLogger } from "../lib/logger";
+import { LogEventRepository } from "../repositories/log-event.repository";
+import {
+  deploymentLogEventSchema,
+  type DeploymentLogEventPayload,
+} from "../schemas/deployment-log-event.schema";
 
 const logger = rootLogger.child({ component: "deployment-log-consumer" });
 
-const decodeHeaders = (
-  headers: KafkaJS.IHeaders | undefined,
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(headers ?? {}).map(([name, value]) => [
-      name,
-      String(Array.isArray(value) ? value.join(",") : value),
-    ]),
-  );
+const INSERT_RETRY_DELAY_MS = 1_000;
 
-const parseValue = (value: Buffer | null): unknown => {
-  const raw = value?.toString("utf8") ?? "";
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
+const parseEvent = (
+  message: KafkaJS.KafkaMessage,
+  partition: number,
+): DeploymentLogEventPayload | undefined => {
+  const location = { partition, offset: message.offset };
+
+  let value: unknown;
   try {
-    return JSON.parse(raw);
+    value = JSON.parse(message.value?.toString("utf8") ?? "");
   } catch {
-    return raw;
+    logger.warn(location, "skipping deployment log event that is not json");
+    return undefined;
   }
+
+  const parsed = deploymentLogEventSchema.safeParse(value);
+
+  if (!parsed.success) {
+    logger.warn(
+      { ...location, issues: parsed.error.issues },
+      "skipping malformed deployment log event",
+    );
+    return undefined;
+  }
+
+  return parsed.data;
 };
 
-const handleMessage: KafkaJS.EachMessageHandler = async ({
-  topic,
-  partition,
-  message,
-}) => {
-  logger.info(
+const handleBatch: KafkaJS.EachBatchHandler = async ({ batch, heartbeat }) => {
+  const events = batch.messages.flatMap((message) => {
+    const event = parseEvent(message, batch.partition);
+    return event ? [event] : [];
+  });
+
+  try {
+    await LogEventRepository.insertMany(events);
+  } catch (err) {
+    logger.error(
+      { err, partition: batch.partition, size: events.length },
+      "failed to insert deployment log events into clickhouse, batch will be retried",
+    );
+    await sleep(INSERT_RETRY_DELAY_MS);
+    await heartbeat();
+    throw err;
+  }
+
+  logger.debug(
     {
-      topic,
-      partition,
-      offset: message.offset,
-      key: message.key?.toString("utf8") ?? null,
-      headers: decodeHeaders(message.headers),
-      event: parseValue(message.value),
+      partition: batch.partition,
+      firstOffset: batch.firstOffset(),
+      lastOffset: batch.lastOffset(),
+      consumed: batch.messages.length,
+      inserted: events.length,
     },
-    "deployment log event consumed",
+    "deployment log events stored",
   );
 };
 
@@ -48,7 +77,7 @@ export const DeploymentLogConsumerService = {
     const consumer = await connectConsumer();
 
     await consumer.subscribe({ topics: [env.KAFKA_DEPLOYMENT_LOGS_TOPIC] });
-    await consumer.run({ eachMessage: handleMessage });
+    await consumer.run({ eachBatch: handleBatch });
 
     logger.info(
       {

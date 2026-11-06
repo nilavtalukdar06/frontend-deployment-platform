@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { env } from "./config/env";
+import { clickhouseClient } from "./db/clickhouse";
 import { disconnectConsumer } from "./lib/kafka";
 import { logger } from "./lib/logger";
 import { DeploymentLogConsumerService } from "./services/deployment-log-consumer.service";
@@ -20,6 +21,9 @@ const shutdown = async (signal: string, exitCode = 0): Promise<void> => {
   }, env.SHUTDOWN_TIMEOUT_MS);
 
   await disconnectConsumer(env.SHUTDOWN_TIMEOUT_MS);
+  await clickhouseClient.close().catch((err: unknown) => {
+    logger.error({ err }, "clickhouse client close failed");
+  });
   clearTimeout(forceExitTimer);
   logger.flush();
   process.exit(exitCode);

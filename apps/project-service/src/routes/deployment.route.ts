@@ -1,0 +1,16 @@
+import { Router } from "express";
+import { DeploymentController } from "../controllers/deployment.controller";
+import { AuthenticateMiddleware } from "../middlewares/authenticate.middleware";
+import { validate } from "../middlewares/validate.middleware";
+import { DeploymentValidator } from "../validators/deployment.validator";
+import { asyncHandler } from "../utils/async-handler";
+
+export const deploymentRouter = Router();
+
+deploymentRouter.use(AuthenticateMiddleware.handle);
+
+deploymentRouter.get(
+  "/:id/logs",
+  validate(DeploymentValidator.listLogs),
+  asyncHandler(DeploymentController.listLogs),
+);

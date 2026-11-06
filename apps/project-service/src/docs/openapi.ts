@@ -132,6 +132,49 @@ const examplePushDeployment = {
   commitSha: "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c",
 };
 
+const exampleDeploymentLogs = {
+  items: [
+    {
+      id: "0d8f7c2e-6a41-4d58-9a8e-5b0c4e2f1a37",
+      sequence: 1,
+      timestamp: "2026-11-03T10:00:05.120Z",
+      type: "step",
+      level: null,
+      step: "initialize",
+      source: null,
+      phase: "started",
+      status: null,
+      message: "Initialize step started",
+    },
+    {
+      id: "6b1e9d34-2c75-4f0a-8e13-7a9d5c4b2e68",
+      sequence: 2,
+      timestamp: "2026-11-03T10:00:05.134Z",
+      type: "log",
+      level: "info",
+      step: "initialize",
+      source: "system",
+      phase: null,
+      status: null,
+      message: "Starting deployment 0194f4d2-7b1a-7c3e-9a55-3e2f1b0c9d84",
+    },
+    {
+      id: "c4a2f6b8-91d3-4e07-b5a6-1f8e3d7c0b92",
+      sequence: 3,
+      timestamp: "2026-11-03T10:00:06.870Z",
+      type: "log",
+      level: "info",
+      step: "install",
+      source: "stdout",
+      phase: null,
+      status: null,
+      message: "added 312 packages in 4s",
+    },
+  ],
+  nextAfter: 3,
+  hasMore: true,
+};
+
 const sharedErrorResponses = {
   "429": ref("TooManyRequests"),
   "500": ref("InternalServerError"),
@@ -568,6 +611,111 @@ const schemas: Record<string, JsonObject> = {
         type: "object",
         required: ["data"],
         properties: { data: { $ref: "#/components/schemas/DeploymentList" } },
+      },
+    ],
+  },
+  DeploymentLog: {
+    type: "object",
+    required: [
+      "id",
+      "sequence",
+      "timestamp",
+      "type",
+      "level",
+      "step",
+      "source",
+      "phase",
+      "status",
+      "message",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      sequence: {
+        type: "integer",
+        minimum: 1,
+        description:
+          "Position of the event in the deployment's log stream, starting at 1 and unique per deployment. Logs are returned in this order and `after` filters on it.",
+        example: 12,
+      },
+      timestamp: {
+        type: "string",
+        format: "date-time",
+        description:
+          "When the deployment pipeline emitted the event. Falls back to the time the event was stored when it is missing.",
+      },
+      type: {
+        type: ["string", "null"],
+        enum: ["log", "step", "status", "end", null],
+        description:
+          "`log` is a line of output, `step` marks a pipeline step starting, completing or failing, `status` is a deployment status change, and `end` is the last event of the stream.",
+      },
+      level: {
+        type: ["string", "null"],
+        enum: ["debug", "info", "warn", "error", null],
+        description: "Only set for `log` events.",
+      },
+      step: {
+        type: ["string", "null"],
+        enum: [
+          "initialize",
+          "clone",
+          "install",
+          "build",
+          "upload",
+          "finalize",
+          null,
+        ],
+        description: "Pipeline step. Only set for `log` and `step` events.",
+      },
+      source: {
+        type: ["string", "null"],
+        enum: ["system", "stdout", "stderr", null],
+        description: "Where a `log` line came from. Only set for `log` events.",
+      },
+      phase: {
+        type: ["string", "null"],
+        enum: ["started", "completed", "failed", null],
+        description: "Only set for `step` events.",
+      },
+      status: {
+        type: ["string", "null"],
+        enum: [...deploymentStatuses, null],
+        description:
+          "Deployment status. Only set for `status` and `end` events.",
+      },
+      message: { type: "string", example: "Install step started" },
+    },
+  },
+  DeploymentLogList: {
+    type: "object",
+    required: ["items", "nextAfter", "hasMore"],
+    properties: {
+      items: {
+        type: "array",
+        items: { $ref: "#/components/schemas/DeploymentLog" },
+      },
+      nextAfter: {
+        type: "integer",
+        minimum: 0,
+        description:
+          "Sequence of the last returned event, or the requested `after` when `items` is empty. Pass it as `after` to fetch the next page, or to poll for new events of a running deployment.",
+        example: 3,
+      },
+      hasMore: {
+        type: "boolean",
+        description: "Whether more events are available right now.",
+      },
+    },
+  },
+  DeploymentLogsResponse: {
+    allOf: [
+      { $ref: "#/components/schemas/MessageResponse" },
+      {
+        type: "object",
+        required: ["data"],
+        properties: {
+          data: { $ref: "#/components/schemas/DeploymentLogList" },
+        },
       },
     ],
   },
@@ -1297,6 +1445,57 @@ const getDeployment: JsonObject = {
   },
 };
 
+const deploymentLogsDeploymentIdParameter: JsonObject = {
+  name: "id",
+  in: "path",
+  required: true,
+  description:
+    "Identifier of a deployment of a project owned by the authenticated user.",
+  schema: { type: "string", format: "uuid" },
+};
+
+const listDeploymentLogs: JsonObject = {
+  tags: ["Deployments"],
+  operationId: "listDeploymentLogs",
+  summary: "List a deployment's logs",
+  description:
+    "Returns the log events of a deployment in the order the pipeline emitted them (ascending `sequence`). The `deployment-service` publishes every event to the Kafka topic `deployment-logs` and the separate `log-worker` application stores them in the ClickHouse table `log_events`, so this route reads from ClickHouse and logs show up a moment after they are produced; The deployment must belong to a project owned by the user, otherwise `404`. Pages are cursor based: pass the `nextAfter` of the previous response as `after` to get the following events, which also lets a client poll a running deployment for new lines; `hasMore` tells whether the page was full. A deployment that has not emitted anything yet returns an empty `items` array. Events delivered twice by Kafka are returned once. If ClickHouse cannot be reached the response is `500`.",
+  security: userIdSecurity,
+  parameters: [
+    deploymentLogsDeploymentIdParameter,
+    {
+      name: "after",
+      in: "query",
+      required: false,
+      description: "Only return events with a `sequence` greater than this.",
+      schema: { type: "integer", minimum: 0, default: 0 },
+    },
+    {
+      name: "limit",
+      in: "query",
+      required: false,
+      schema: { type: "integer", minimum: 1, maximum: 1000, default: 500 },
+    },
+  ],
+  responses: {
+    "200": {
+      description: "A page of log events.",
+      content: jsonContent("DeploymentLogsResponse", {
+        success: true,
+        statusCode: 200,
+        message: SuccessMessage.DEPLOYMENT_LOGS_RETRIEVED,
+        data: exampleDeploymentLogs,
+      }),
+    },
+    "400": ref("ValidationError"),
+    "404": errorResponse(
+      "`DEPLOYMENT_NOT_FOUND`: the deployment does not exist, or its project is not owned by this user or was deleted. Uses the `NOT_FOUND` error code.",
+      errorExample(404, ErrorCode.NOT_FOUND, ErrorMessage.DEPLOYMENT_NOT_FOUND),
+    ),
+    ...protectedErrorResponses,
+  },
+};
+
 const cancelDeployment: JsonObject = {
   tags: ["Deployments"],
   operationId: "cancelDeployment",
@@ -1633,7 +1832,7 @@ export const openApiDocument: JsonObject = {
   info: {
     title: "Project Service API",
     version: "1.0.0",
-    description: `Project management for the React deployment platform. A project describes how to build a Vite app from one of the user's GitHub repositories (public or private) and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` route requires that header to be a UUID and only ever reads or changes projects owned by that user.\n\n**GitHub access.** Routes that talk to GitHub fetch the user's GitHub OAuth token from the auth-service (\`GET /internal/users/{id}/github-token\`, authenticated with \`INTERNAL_API_KEY\`) and call GitHub with it, so private repositories are supported and GitHub's per-user rate limit applies. Unknown routes return a \`404\` with the standard error envelope.`,
+    description: `Project management for the React deployment platform. A project describes how to build a Vite app from one of the user's GitHub repositories (public or private) and is owned by exactly one user.\n\n**Authentication.** The service does not verify tokens. It trusts the \`${USER_ID_HEADER}\` header that the api-gateway sets after verifying the bearer token, so it must only be reachable through the gateway. Every \`/projects\` and \`/deployment\` route requires that header to be a UUID and only ever reads or changes projects, and the deployments of projects, owned by that user.\n\n**GitHub access.** Routes that talk to GitHub fetch the user's GitHub OAuth token from the auth-service (\`GET /internal/users/{id}/github-token\`, authenticated with \`INTERNAL_API_KEY\`) and call GitHub with it, so private repositories are supported and GitHub's per-user rate limit applies. Deployment logs are read from ClickHouse (\`CLICKHOUSE_URL\`), where the \`log-worker\` application stores them. Unknown routes return a \`404\` with the standard error envelope.`,
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [
@@ -1673,6 +1872,7 @@ export const openApiDocument: JsonObject = {
       get: listDeployments,
     },
     "/projects/{id}/deployments/{deploymentId}": { get: getDeployment },
+    "/deployment/{id}/logs": { get: listDeploymentLogs },
     "/projects/{id}/deployments/{deploymentId}/cancel": {
       post: cancelDeployment,
     },
