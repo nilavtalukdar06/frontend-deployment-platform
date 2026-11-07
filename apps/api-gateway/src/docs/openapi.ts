@@ -32,6 +32,10 @@ const ProjectServiceMessage = {
   SOURCE_NOT_FOUND:
     "The branch or root directory was not found in the repository",
   UNSUPPORTED_FRAMEWORK: "Only Vite projects are supported",
+  PACKAGE_MANAGER_COMMAND_MISMATCH:
+    "The install command must be run with the project's package manager",
+  RUNTIME_COMMAND_MISMATCH:
+    "The build command must run on the project's runtime",
   GITHUB_UNAVAILABLE:
     "The repository could not be verified with GitHub, please try again later",
   PROJECT_CREATED: "Project created successfully",
@@ -74,7 +78,11 @@ const RESERVED_ENVIRONMENT_VARIABLE_KEYS = [
   "HOME",
   "CI",
   "COREPACK_ENABLE_DOWNLOAD_PROMPT",
+  "COREPACK_ENABLE_STRICT",
 ] as const;
+
+const PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "bun"] as const;
+const RUNTIMES = ["node", "bun"] as const;
 
 const PROJECT_FRAMEWORKS = ["vite"] as const;
 const DEPLOYMENT_TRIGGERS = ["create", "manual", "push"] as const;
@@ -151,10 +159,23 @@ const exampleProject = {
   branch: "main",
   framework: "vite",
   rootDirectory: ".",
+  packageManager: "npm",
+  runtime: "node",
   installCommand: "npm install",
   buildCommand: "npm run build",
   outputDirectory: "dist",
   autoDeploy: true,
+  latestDeployment: {
+    id: "0192f5a4-8c2f-7d4b-ae3f-6a9b2c3d4e5f",
+    status: "ready",
+    trigger: "create",
+    branch: "main",
+    commitSha: "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c",
+    errorMessage: null,
+    startedAt: "2026-11-03T09:30:05.000Z",
+    finishedAt: "2026-11-03T09:31:42.000Z",
+    createdAt: "2026-11-03T09:30:00.000Z",
+  },
   createdAt: "2026-11-03T09:30:00.000Z",
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
@@ -168,6 +189,8 @@ const exampleDeployment = {
   commitSha: null,
   framework: "vite",
   rootDirectory: ".",
+  packageManager: "npm",
+  runtime: "node",
   installCommand: "npm install",
   buildCommand: "npm run build",
   outputDirectory: "dist",
@@ -340,18 +363,34 @@ const projectProperties: Record<string, JsonObject> = {
     ),
     example: ".",
   },
+  packageManager: {
+    type: "string",
+    enum: [...PACKAGE_MANAGERS],
+    description:
+      "Package manager used to install dependencies. Defaults to `npm`. The `installCommand` must be run with this package manager.",
+    example: "npm",
+  },
+  runtime: {
+    type: "string",
+    enum: [...RUNTIMES],
+    description:
+      "Runtime that executes the build. Defaults to `bun` when `packageManager` is `bun`, otherwise `node`. The `buildCommand` must run on this runtime: `node` runs the build through a Node-based package manager (`npm`/`npx`/`pnpm`/`pnpx`/`yarn`/`node`), `bun` runs it with `bun`/`bunx`.",
+    example: "node",
+  },
   installCommand: {
     type: "string",
     minLength: 1,
     maxLength: 500,
-    description: "Defaults to `npm install`.",
+    description:
+      "Must invoke the project's `packageManager`. Defaults to that package manager's install command (e.g. `npm install`, `pnpm install`, `yarn install`, `bun install`).",
     example: "npm install",
   },
   buildCommand: {
     type: "string",
     minLength: 1,
     maxLength: 500,
-    description: "Defaults to `npm run build`.",
+    description:
+      "Must run on the project's `runtime`. Defaults to `bun run build` on the bun runtime, otherwise the package manager's build command (e.g. `npm run build`, `pnpm run build`, `yarn build`).",
     example: "npm run build",
   },
   outputDirectory: {
@@ -418,6 +457,18 @@ const schemas: Record<string, JsonObject> = {
       },
     },
   },
+  PackageManager: {
+    type: "string",
+    enum: [...PACKAGE_MANAGERS],
+    description:
+      "Supported package managers, used for the install command. `npm` is always available; `pnpm` and `yarn` are provided by corepack; `bun` is installed in the build image.",
+  },
+  Runtime: {
+    type: "string",
+    enum: [...RUNTIMES],
+    description:
+      "Runtime that executes the build command, independent of the package manager. Both `node` and `bun` are available in the build image.",
+  },
   ProjectFramework: {
     type: "string",
     enum: [...PROJECT_FRAMEWORKS],
@@ -429,7 +480,7 @@ const schemas: Record<string, JsonObject> = {
     additionalProperties: false,
     required: ["repositoryId"],
     description:
-      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub. `installCommand` and `buildCommand` fall back to their defaults when omitted; the remaining settings start with defaults. Everything except the repository can be changed later with `PATCH`.",
+      "Imports one of the repositories returned by `GET /projects/repositories`. The name, description, repository URL, visibility and branch of the project are taken from GitHub. `packageManager` defaults to `npm` and `runtime` defaults to `bun` for a bun project and `node` otherwise; `installCommand` falls back to the package manager's default and `buildCommand` to the runtime's default when omitted. A supplied `installCommand` must invoke the package manager and a supplied `buildCommand` must run on the runtime. The remaining settings start with defaults. Everything except the repository can be changed later with `PATCH`.",
     properties: {
       repositoryId: {
         type: "integer",
@@ -438,6 +489,8 @@ const schemas: Record<string, JsonObject> = {
           "GitHub numeric repository id (`id` from `GET /projects/repositories`). The repository must be accessible with the user's GitHub token, the user must have push access, it must not be archived or disabled, and its default branch must be a Vite project.",
         example: 715409281,
       },
+      packageManager: projectProperties["packageManager"],
+      runtime: projectProperties["runtime"],
       installCommand: projectProperties["installCommand"],
       buildCommand: projectProperties["buildCommand"],
       environmentVariables: {
@@ -483,7 +536,7 @@ const schemas: Record<string, JsonObject> = {
     additionalProperties: false,
     minProperties: 1,
     description:
-      "Partial update. At least one field is required; fields that are omitted stay unchanged. The repository, slug and framework cannot be changed. Changing `branch` or `rootDirectory` re-checks the new location with the GitHub API and requires it to still be a Vite project.",
+      "Partial update. At least one field is required; fields that are omitted stay unchanged. The repository, slug and framework cannot be changed. Changing `branch` or `rootDirectory` re-checks the new location with the GitHub API and requires it to still be a Vite project. `installCommand` must invoke the project's `packageManager` and `buildCommand` must run on its `runtime` (the ones being set in this request, otherwise the current ones). Switching `packageManager` without supplying an `installCommand` resets it to the new package manager's default; switching `packageManager` or `runtime` without supplying a `buildCommand` resets it to the runtime's default.",
     properties: {
       name: projectProperties["name"],
       description: {
@@ -494,6 +547,8 @@ const schemas: Record<string, JsonObject> = {
       },
       branch: projectProperties["branch"],
       rootDirectory: projectProperties["rootDirectory"],
+      packageManager: projectProperties["packageManager"],
+      runtime: projectProperties["runtime"],
       installCommand: projectProperties["installCommand"],
       buildCommand: projectProperties["buildCommand"],
       outputDirectory: projectProperties["outputDirectory"],
@@ -513,10 +568,13 @@ const schemas: Record<string, JsonObject> = {
       "branch",
       "framework",
       "rootDirectory",
+      "packageManager",
+      "runtime",
       "installCommand",
       "buildCommand",
       "outputDirectory",
       "autoDeploy",
+      "latestDeployment",
       "createdAt",
       "updatedAt",
     ],
@@ -551,6 +609,8 @@ const schemas: Record<string, JsonObject> = {
       branch: { type: "string" },
       framework: { $ref: "#/components/schemas/ProjectFramework" },
       rootDirectory: { type: "string" },
+      packageManager: { $ref: "#/components/schemas/PackageManager" },
+      runtime: { $ref: "#/components/schemas/Runtime" },
       installCommand: { type: "string" },
       buildCommand: { type: "string" },
       outputDirectory: { type: "string" },
@@ -559,8 +619,43 @@ const schemas: Record<string, JsonObject> = {
         description:
           "Whether a GitHub push webhook is installed on the repository, so pushes to the project's `branch` by the repository owner or a collaborator deploy automatically through `POST /webhooks/github/projects/{projectId}`. Installing a webhook needs admin access to the repository, so this is `false` when the importing user is not a repository admin; enable it later with `POST /projects/{id}/webhook`.",
       },
+      latestDeployment: {
+        anyOf: [
+          { $ref: "#/components/schemas/LatestDeployment" },
+          { type: "null" },
+        ],
+        description:
+          "The project's most recently created deployment, or `null` when it has none.",
+      },
       createdAt: { type: "string", format: "date-time" },
       updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  LatestDeployment: {
+    type: "object",
+    description:
+      "Summary of the project's most recently created deployment, whatever its status, so project lists can show the current state without loading every project's deployments. `null` on the project when it has no deployments.",
+    required: [
+      "id",
+      "status",
+      "trigger",
+      "branch",
+      "commitSha",
+      "errorMessage",
+      "startedAt",
+      "finishedAt",
+      "createdAt",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: { $ref: "#/components/schemas/DeploymentStatus" },
+      trigger: { $ref: "#/components/schemas/DeploymentTrigger" },
+      branch: { type: "string" },
+      commitSha: { type: ["string", "null"], pattern: "^[0-9a-f]{40}$" },
+      errorMessage: { type: ["string", "null"] },
+      startedAt: { type: ["string", "null"], format: "date-time" },
+      finishedAt: { type: ["string", "null"], format: "date-time" },
+      createdAt: { type: "string", format: "date-time" },
     },
   },
   DeploymentTrigger: {
@@ -623,6 +718,8 @@ const schemas: Record<string, JsonObject> = {
       "commitSha",
       "framework",
       "rootDirectory",
+      "packageManager",
+      "runtime",
       "installCommand",
       "buildCommand",
       "outputDirectory",
@@ -650,6 +747,8 @@ const schemas: Record<string, JsonObject> = {
       },
       framework: { $ref: "#/components/schemas/ProjectFramework" },
       rootDirectory: { type: "string" },
+      packageManager: { $ref: "#/components/schemas/PackageManager" },
+      runtime: { $ref: "#/components/schemas/Runtime" },
       installCommand: { type: "string" },
       buildCommand: { type: "string" },
       outputDirectory: { type: "string" },
@@ -1255,7 +1354,7 @@ const schemas: Record<string, JsonObject> = {
       message: { type: "string" },
       details: {
         description:
-          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for `ENVIRONMENT_VARIABLE_LIMIT_REACHED` it is `{ maxEnvironmentVariables }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service and project-service are forwarded unchanged.",
+          "Optional context. For `VALIDATION_ERROR` it is the Zod tree-ified error (`errors` plus per-field `properties`); for `NOT_FOUND` it is `{ path }`; for `PAYLOAD_TOO_LARGE` it is `{ maxBytes }`; for `UNSUPPORTED_FRAMEWORK` it is `{ detectedFramework }`; for `PACKAGE_MANAGER_COMMAND_MISMATCH` it is `{ packageManager }`; for `RUNTIME_COMMAND_MISMATCH` it is `{ runtime }`; for `ENVIRONMENT_VARIABLE_LIMIT_REACHED` it is `{ maxEnvironmentVariables }`; for an `INVALID_REPOSITORY` caused by a missing branch or root directory it is `{ branch, rootDirectory }`; for `BAD_GATEWAY`, `SERVICE_UNAVAILABLE` and `GATEWAY_TIMEOUT` it is `{ service }`. Errors produced by the auth-service and project-service are forwarded unchanged.",
       },
       stack: {
         type: "string",
@@ -1284,7 +1383,7 @@ const responses: Record<string, JsonObject> = {
     ),
   ),
   TooManyRequests: errorResponse(
-    "The per-client rate limit was exceeded, either at the gateway or at an upstream service. The gateway applies `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every route and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `GET /auth/github`, `GET /auth/github/callback` and `POST /auth/refresh`. Routes under `/webhooks` are excluded from `RATE_LIMIT_MAX` and use their own limit of `WEBHOOK_RATE_LIMIT_MAX` requests per `WEBHOOK_RATE_LIMIT_WINDOW_MS` instead. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
+    "The per-client rate limit was exceeded, either at the gateway or at an upstream service. The gateway applies `READ_RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to read requests (`GET` and `HEAD`) and `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS` to every other request, counted separately so dashboards can poll frequently, and, on top of that, `CREDENTIAL_RATE_LIMIT_MAX` requests per `CREDENTIAL_RATE_LIMIT_WINDOW_MS` to `GET /auth/github`, `GET /auth/github/callback` and `POST /auth/refresh`. Routes under `/webhooks` are excluded from `RATE_LIMIT_MAX` and `READ_RATE_LIMIT_MAX` and use their own limit of `WEBHOOK_RATE_LIMIT_MAX` requests per `WEBHOOK_RATE_LIMIT_WINDOW_MS` instead. Clients are identified by IP address and counters live in Redis, so limits hold across gateway instances. Standard `RateLimit-*` headers are returned on every response.",
     errorExample(
       429,
       ErrorCode.TOO_MANY_REQUESTS,
@@ -1318,7 +1417,7 @@ const responses: Record<string, JsonObject> = {
   ),
   RepositoryRejected: {
     description:
-      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist, is not accessible with the user's GitHub token, the user has no push access, or it is archived or disabled (all reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally.",
+      "The repository was rejected. `INVALID_REPOSITORY` means it does not exist, is not accessible with the user's GitHub token, the user has no push access, or it is archived or disabled (all reported the same way), or that the branch or root directory does not exist in it. `UNSUPPORTED_FRAMEWORK` means it is not a Vite project; `details.detectedFramework` is the framework that was detected instead, or `null`. Only Vite is supported, and it is detected with Vercel's framework detection, so a Next.js, Remix, SvelteKit or Create React App project is rejected even when it uses Vite internally. `PACKAGE_MANAGER_COMMAND_MISMATCH` (`details.packageManager`) means the `installCommand` does not invoke the package manager, and `RUNTIME_COMMAND_MISMATCH` (`details.runtime`) means the `buildCommand` does not run on the runtime.",
     content: {
       "application/json": {
         schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -1347,6 +1446,25 @@ const responses: Record<string, JsonObject> = {
               ErrorCode.UNSUPPORTED_FRAMEWORK,
               ProjectServiceMessage.UNSUPPORTED_FRAMEWORK,
               { detectedFramework: "nextjs" },
+            ),
+          },
+          packageManagerCommandMismatch: {
+            summary:
+              "Install command does not use the project's package manager",
+            value: errorExample(
+              422,
+              ErrorCode.PACKAGE_MANAGER_COMMAND_MISMATCH,
+              ProjectServiceMessage.PACKAGE_MANAGER_COMMAND_MISMATCH,
+              { packageManager: "pnpm" },
+            ),
+          },
+          runtimeCommandMismatch: {
+            summary: "Build command does not run on the project's runtime",
+            value: errorExample(
+              422,
+              ErrorCode.RUNTIME_COMMAND_MISMATCH,
+              ProjectServiceMessage.RUNTIME_COMMAND_MISMATCH,
+              { runtime: "bun" },
             ),
           },
         },
@@ -2368,7 +2486,7 @@ const githubWebhook: JsonObject = {
   operationId: "receiveGithubWebhook",
   summary: "Receive a GitHub webhook delivery",
   description:
-    "Public, called by GitHub. Proxied to the project-service `POST /webhooks/github/projects/{projectId}` without bearer authentication, with the raw body streamed unchanged so the signature can be verified upstream. The body may be up to `MAX_WEBHOOK_BODY_BYTES` (5 MiB by default) instead of `MAX_REQUEST_BODY_BYTES`, and the route uses its own rate limit (`WEBHOOK_RATE_LIMIT_MAX` requests per `WEBHOOK_RATE_LIMIT_WINDOW_MS`) instead of the global one.\n\nThe project-service verifies `X-Hub-Signature-256` with the project's webhook secret, answers `200` to `ping`, and for a `push` to the project's `branch` whose sender is the repository owner or a collaborator, creates a `queued` deployment with trigger `push` for the pushed commit and answers `202` with `data.deploymentId`. Every other event or push (other branches, branch deletions, pushes by non-collaborators, redeliveries of an already processed `X-GitHub-Delivery`) answers `202` with `data.reason`.",
+    "Public, called by GitHub. Proxied to the project-service `POST /webhooks/github/projects/{projectId}` without bearer authentication, with the raw body streamed unchanged so the signature can be verified upstream. The body may be up to `MAX_WEBHOOK_BODY_BYTES` (5 MiB by default) instead of `MAX_REQUEST_BODY_BYTES`, and the route uses its own rate limit (`WEBHOOK_RATE_LIMIT_MAX` requests per `WEBHOOK_RATE_LIMIT_WINDOW_MS`) instead of the global and read ones.\n\nThe project-service verifies `X-Hub-Signature-256` with the project's webhook secret, answers `200` to `ping`, and for a `push` to the project's `branch` whose sender is the repository owner or a collaborator, creates a `queued` deployment with trigger `push` for the pushed commit and answers `202` with `data.deploymentId`. Every other event or push (other branches, branch deletions, pushes by non-collaborators, redeliveries of an already processed `X-GitHub-Delivery`) answers `202` with `data.reason`.",
   security: [],
   parameters: [
     {
@@ -2474,7 +2592,7 @@ export const openApiDocument: JsonObject = {
     title: "API Gateway",
     version: "1.0.0",
     description:
-      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service, routes under `/projects` and `/webhooks` to the project-service, routes under `/analytics` to the analytics-service and routes under `/deployment` to the logs-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, `/analytics` and `/deployment`, is denied by default without a valid bearer token. Routes under `/webhooks` are public; they are called by GitHub and authenticated upstream by the webhook signature. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service, the analytics-service and the logs-service rely on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` (or `MAX_WEBHOOK_BODY_BYTES` under `/webhooks`) are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
+      "Single entry point for the React deployment platform. Routes under `/auth` are reverse-proxied to the auth-service, routes under `/projects` and `/webhooks` to the project-service, routes under `/analytics` to the analytics-service and routes under `/deployment` to the logs-service, with the method, path, query string, headers, cookies and body left untouched, so request and response contracts are identical to the upstream service.\n\n**Authentication.** The gateway authenticates every `/auth/*` request except the public routes `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/refresh` and `POST /auth/logout`; any other method or path under `/auth`, and every route under `/projects`, `/analytics` and `/deployment`, is denied by default without a valid bearer token. Routes under `/webhooks` are public; they are called by GitHub and authenticated upstream by the webhook signature. It verifies the HS256 access token against the shared `JWT_ACCESS_SECRET`, `JWT_ISSUER` and `JWT_AUDIENCE`, rejects refresh tokens, and checks in Redis that the token is not blacklisted and that its session (created at login, deleted at logout) still exists, so logging out invalidates all access tokens of that session. Missing tokens give `401 UNAUTHORIZED`; invalid, expired or revoked tokens give `401 INVALID_TOKEN`. The `Authorization` header is still forwarded, and verified requests also carry `x-user-id` and `x-session-id` headers to the upstream. Client-supplied `x-user-id` and `x-session-id` headers are always removed. The project-service, the analytics-service and the logs-service rely on `x-user-id` to scope every project to its owner.\n\n**Rate limiting.** Redis-backed, per client IP, shared across gateway instances, with separate budgets for read (`GET`/`HEAD`) and write requests and a stricter limit on the credential routes (see the `429` response). If Redis is unavailable the limiter lets requests through while authenticated routes fail with `503`.\n\n**Request size.** Bodies larger than `MAX_REQUEST_BODY_BYTES` (or `MAX_WEBHOOK_BODY_BYTES` under `/webhooks`) are rejected with `413 PAYLOAD_TOO_LARGE`. Bodies are streamed to the upstream, never parsed.\n\n**Other behaviour.** Security headers, CORS (the single source of CORS headers; any `Access-Control-*` header sent by an upstream service is dropped), an `x-request-id` header (generated when absent and forwarded upstream) and `X-Forwarded-*` headers are added. Unknown routes return a `404` with the standard error envelope; upstream failures return `502`, `503` or `504` with the same envelope.",
   },
   servers: [{ url: "/", description: "Current host" }],
   tags: [

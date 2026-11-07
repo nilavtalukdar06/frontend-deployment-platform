@@ -1,17 +1,34 @@
 import { cn } from "@/lib/utils";
+import type { DeploymentStatus } from "@/features/deployments/types";
 
-type DeploymentStatus = "ready" | "building" | "failed" | "canceled";
+type StatusTone = "ready" | "building" | "failed" | "canceled" | "queued";
 
-const dotClassNames: Record<DeploymentStatus, string> = {
+const toneByStatus: Record<DeploymentStatus, StatusTone> = {
+  queued: "queued",
+  cloning: "building",
+  installing: "building",
+  building: "building",
+  uploading: "building",
+  ready: "ready",
+  failed: "failed",
+  canceled: "canceled",
+};
+
+const dotClassNames: Record<StatusTone, string> = {
   ready: "bg-success",
   building: "bg-warning ring-[3px] ring-warning/20",
   failed: "bg-destructive",
   canceled: "bg-neutral-status",
+  queued: "bg-subtle ring-[3px] ring-subtle/20",
 };
 
 const statusLabels: Record<DeploymentStatus, string> = {
-  ready: "Ready",
+  queued: "Queued",
+  cloning: "Building",
+  installing: "Building",
   building: "Building",
+  uploading: "Building",
+  ready: "Ready",
   failed: "Failed",
   canceled: "Canceled",
 };
@@ -26,9 +43,10 @@ function StatusDot({
   return (
     <span
       data-slot="status-dot"
+      aria-hidden="true"
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
-        dotClassNames[status],
+        dotClassNames[toneByStatus[status]],
         className,
       )}
     />
@@ -53,10 +71,12 @@ function StatusLabel({
       <span className="font-medium text-foreground">
         {statusLabels[status]}
       </span>
-      {duration && <span className="text-muted-foreground">{duration}</span>}
+      {duration ? (
+        <span className="text-muted-foreground tabular-nums">{duration}</span>
+      ) : null}
     </span>
   );
 }
 
-export { StatusDot, StatusLabel };
+export { StatusDot, StatusLabel, statusLabels };
 export type { DeploymentStatus };

@@ -9,7 +9,8 @@ import {
   Settings,
 } from "lucide-react";
 import { NavItem } from "@/components/deploy/nav-item";
-import { SidebarSearch, SidebarUser } from "@/components/deploy/app-shell";
+import { SidebarUser } from "@/components/deploy/app-shell";
+import { SidebarSearchButton } from "@/components/deploy/project-search-dialog";
 import { VercelLogo } from "@/components/brand/vercel-logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -23,7 +24,7 @@ function SidebarFrame({ children }: { children: React.ReactNode }) {
         <span className="text-title font-medium">Deploy</span>
       </div>
       <div className="flex flex-col gap-4 p-3">
-        <SidebarSearch />
+        <SidebarSearchButton />
         <nav className="flex flex-col">{children}</nav>
       </div>
       <div className="mt-auto border-t border-border p-3">

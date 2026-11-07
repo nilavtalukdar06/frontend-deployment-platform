@@ -72,6 +72,17 @@ const exampleProject = {
   buildCommand: "npm run build",
   outputDirectory: "dist",
   autoDeploy: true,
+  latestDeployment: {
+    id: "0192f5a4-8c2f-7d4b-ae3f-6a9b2c3d4e5f",
+    status: "ready",
+    trigger: "create",
+    branch: "main",
+    commitSha: "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c",
+    errorMessage: null,
+    startedAt: "2026-11-03T09:30:05.000Z",
+    finishedAt: "2026-11-03T09:31:42.000Z",
+    createdAt: "2026-11-03T09:30:00.000Z",
+  },
   createdAt: "2026-11-03T09:30:00.000Z",
   updatedAt: "2026-11-03T09:30:00.000Z",
 };
@@ -377,6 +388,7 @@ const schemas: Record<string, JsonObject> = {
       "buildCommand",
       "outputDirectory",
       "autoDeploy",
+      "latestDeployment",
       "createdAt",
       "updatedAt",
     ],
@@ -421,8 +433,43 @@ const schemas: Record<string, JsonObject> = {
         description:
           "Whether a GitHub push webhook is installed on the repository, so pushes to the project's `branch` by the repository owner or a collaborator deploy automatically. Installing a webhook needs admin access to the repository, so this is `false` when the importing user is not a repository admin; enable it later with `POST /projects/{id}/webhook`.",
       },
+      latestDeployment: {
+        anyOf: [
+          { $ref: "#/components/schemas/LatestDeployment" },
+          { type: "null" },
+        ],
+        description:
+          "The project's most recently created deployment, or `null` when it has none.",
+      },
       createdAt: { type: "string", format: "date-time" },
       updatedAt: { type: "string", format: "date-time" },
+    },
+  },
+  LatestDeployment: {
+    type: "object",
+    description:
+      "Summary of the project's most recently created deployment, whatever its status, so project lists can show the current state without loading every project's deployments. `null` on the project when it has no deployments.",
+    required: [
+      "id",
+      "status",
+      "trigger",
+      "branch",
+      "commitSha",
+      "errorMessage",
+      "startedAt",
+      "finishedAt",
+      "createdAt",
+    ],
+    properties: {
+      id: { type: "string", format: "uuid" },
+      status: { $ref: "#/components/schemas/DeploymentStatus" },
+      trigger: { $ref: "#/components/schemas/DeploymentTrigger" },
+      branch: { type: "string" },
+      commitSha: { type: ["string", "null"], pattern: "^[0-9a-f]{40}$" },
+      errorMessage: { type: ["string", "null"] },
+      startedAt: { type: ["string", "null"], format: "date-time" },
+      finishedAt: { type: ["string", "null"], format: "date-time" },
+      createdAt: { type: "string", format: "date-time" },
     },
   },
   DeploymentTrigger: {
@@ -944,7 +991,7 @@ const responses: Record<string, JsonObject> = {
     ),
   ),
   TooManyRequests: errorResponse(
-    "The per-client rate limit was exceeded (`RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`). Standard `RateLimit-*` headers are returned on every response.",
+    "The per-client rate limit was exceeded. Read requests (`GET` and `HEAD`) are limited to `READ_RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`, so dashboards can poll deployments frequently, and all other methods to `RATE_LIMIT_MAX` requests per `RATE_LIMIT_WINDOW_MS`; the two budgets are counted separately. Routes under `/webhooks` are excluded. Standard `RateLimit-*` headers are returned on every response.",
     errorExample(
       429,
       ErrorCode.TOO_MANY_REQUESTS,

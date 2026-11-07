@@ -90,6 +90,24 @@ export abstract class DeploymentRepository {
     return { items, total: totals?.total ?? 0 };
   }
 
+  static async findLatestByProjectIds(
+    projectIds: string[],
+  ): Promise<Deployment[]> {
+    if (projectIds.length === 0) {
+      return [];
+    }
+
+    return db
+      .selectDistinctOn([deployments.projectId])
+      .from(deployments)
+      .where(inArray(deployments.projectId, projectIds))
+      .orderBy(
+        deployments.projectId,
+        desc(deployments.createdAt),
+        desc(deployments.id),
+      );
+  }
+
   static async findByIdForProject(
     id: string,
     projectId: string,

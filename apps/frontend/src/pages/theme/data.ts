@@ -1,4 +1,4 @@
-import type { DeploymentStatus } from "@/components/deploy/status-dot";
+type DeploymentStatus = "ready" | "building" | "failed" | "canceled";
 
 type Swatch = {
   name: string;

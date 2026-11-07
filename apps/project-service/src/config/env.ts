@@ -60,6 +60,7 @@ export const env = createEnv({
       .positive()
       .default(15 * 60 * 1000),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+    READ_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1200),
 
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

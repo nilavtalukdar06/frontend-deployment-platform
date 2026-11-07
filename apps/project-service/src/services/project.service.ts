@@ -55,8 +55,21 @@ export interface PublicProject {
   buildCommand: string;
   outputDirectory: string;
   autoDeploy: boolean;
+  latestDeployment: LatestDeployment | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface LatestDeployment {
+  id: string;
+  status: Deployment["status"];
+  trigger: Deployment["trigger"];
+  branch: string;
+  commitSha: string | null;
+  errorMessage: string | null;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
 }
 
 export interface PublicDeployment {
@@ -154,7 +167,24 @@ const webhookUrlFor = (projectId: string): string =>
   ).toString();
 
 export abstract class ProjectService {
-  static toPublicProject(project: Project): PublicProject {
+  static toLatestDeployment(deployment: Deployment): LatestDeployment {
+    return {
+      id: deployment.id,
+      status: deployment.status,
+      trigger: deployment.trigger,
+      branch: deployment.branch,
+      commitSha: deployment.commitSha,
+      errorMessage: deployment.errorMessage,
+      startedAt: deployment.startedAt,
+      finishedAt: deployment.finishedAt,
+      createdAt: deployment.createdAt,
+    };
+  }
+
+  static toPublicProject(
+    project: Project,
+    latestDeployment: Deployment | null = null,
+  ): PublicProject {
     return {
       id: project.id,
       slug: project.slug,
@@ -173,6 +203,9 @@ export abstract class ProjectService {
       buildCommand: project.buildCommand,
       outputDirectory: project.outputDirectory,
       autoDeploy: project.githubWebhookId !== null,
+      latestDeployment: latestDeployment
+        ? ProjectService.toLatestDeployment(latestDeployment)
+        : null,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -312,7 +345,7 @@ export abstract class ProjectService {
           userId,
         });
 
-        return ProjectService.toPublicProject(withWebhook);
+        return ProjectService.toPublicProject(withWebhook, deployment);
       } catch (err) {
         if (
           ProjectService.uniqueViolationConstraint(err) === SLUG_UNIQUE_INDEX
@@ -344,8 +377,20 @@ export abstract class ProjectService {
       search,
     );
 
+    const latestDeployments = await DeploymentRepository.findLatestByProjectIds(
+      items.map((project) => project.id),
+    );
+    const latestByProject = new Map(
+      latestDeployments.map((deployment) => [deployment.projectId, deployment]),
+    );
+
     return {
-      items: items.map(ProjectService.toPublicProject),
+      items: items.map((project) =>
+        ProjectService.toPublicProject(
+          project,
+          latestByProject.get(project.id) ?? null,
+        ),
+      ),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -357,7 +402,7 @@ export abstract class ProjectService {
       throw ProjectService.projectNotFound();
     }
 
-    return ProjectService.toPublicProject(project);
+    return ProjectService.withLatestDeployment(project);
   }
 
   static async update(
@@ -411,7 +456,7 @@ export abstract class ProjectService {
         throw ProjectService.projectNotFound();
       }
 
-      return ProjectService.toPublicProject(project);
+      return await ProjectService.withLatestDeployment(project);
     } catch (err) {
       throw ProjectService.mapWriteError(err);
     }
@@ -496,7 +541,7 @@ export abstract class ProjectService {
       );
     }
 
-    return ProjectService.toPublicProject(updated);
+    return ProjectService.withLatestDeployment(updated);
   }
 
   static async listDeployments(
@@ -645,6 +690,15 @@ export abstract class ProjectService {
       ErrorCode.RUNTIME_COMMAND_MISMATCH,
       { runtime },
     );
+  }
+
+  private static async withLatestDeployment(
+    project: Project,
+  ): Promise<PublicProject> {
+    const [latestDeployment] =
+      await DeploymentRepository.findLatestByProjectIds([project.id]);
+
+    return ProjectService.toPublicProject(project, latestDeployment ?? null);
   }
 
   private static async purgeDeployments(

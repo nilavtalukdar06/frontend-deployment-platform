@@ -45,11 +45,22 @@ const createRateLimiter = ({
     },
   });
 
+const READ_METHODS = new Set(["GET", "HEAD"]);
+
+const isReadRequest = (req: Request) => READ_METHODS.has(req.method);
+
 export const rateLimiter = createRateLimiter({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   limit: env.RATE_LIMIT_MAX,
   prefix: "gateway-rate-limit:",
-  skip: isWebhookRoute,
+  skip: (req) => isWebhookRoute(req) || isReadRequest(req),
+});
+
+export const readRateLimiter = createRateLimiter({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  limit: env.READ_RATE_LIMIT_MAX,
+  prefix: "gateway-read-rate-limit:",
+  skip: (req) => isWebhookRoute(req) || !isReadRequest(req),
 });
 
 export const webhookRateLimiter = createRateLimiter({

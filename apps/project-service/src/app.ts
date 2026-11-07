@@ -4,7 +4,10 @@ import {
   applySecurityMiddlewares,
   notFoundHandler,
 } from "@repo/http/middlewares";
-import { rateLimiter } from "./middlewares/rate-limit.middleware";
+import {
+  rateLimiter,
+  readRateLimiter,
+} from "./middlewares/rate-limit.middleware";
 import { requestLogger } from "./middlewares/request-logger.middleware";
 import { globalErrorHandler } from "./middlewares/error-handler.middleware";
 import { router } from "./routes";
@@ -16,6 +19,7 @@ export const createApp = (): Application => {
   applySecurityMiddlewares(app);
   app.use(corsMiddleware);
   app.use(requestLogger);
+  app.use(readRateLimiter);
   app.use(rateLimiter);
 
   app.use(
