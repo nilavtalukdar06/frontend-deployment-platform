@@ -62,7 +62,7 @@ function BarChartCard() {
                 {hourlyViews.map((views, index) => (
                   <span
                     key={index}
-                    className={`flex-1 rounded-t-[3px] ${index === peakIndex ? "bg-chart-1" : "bg-chart-muted"}`}
+                    className={`flex-1 rounded-t-sm ${index === peakIndex ? "bg-chart-1" : "bg-chart-muted"}`}
                     style={{ height: `${(views / chartMax) * 100}%` }}
                   />
                 ))}
@@ -157,7 +157,7 @@ function RoutesCard() {
                 <td className="py-3">
                   <span className="flex items-center gap-3">
                     <span
-                      className="size-2.5 rounded-[3px]"
+                      className="size-2.5 rounded-sm"
                       style={{ backgroundColor: row.color }}
                     />
                     <span

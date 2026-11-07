@@ -363,7 +363,7 @@ function AnalyticsSummaryCard({ project }: { project: Project }) {
             {values.map((point) => (
               <span
                 key={point.hour}
-                className="flex-1 rounded-t-[2px] bg-chart-1"
+                className="flex-1 rounded-t-xs bg-chart-1"
                 style={{
                   height: `${peak === 0 ? 0 : Math.max((point.views / peak) * 100, 4)}%`,
                 }}
