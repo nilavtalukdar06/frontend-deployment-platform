@@ -1079,7 +1079,7 @@ flowchart LR
     PX[proxy-service] -- "{site, deploymentId, route}<br/>key = deploymentId, acks=1" --> T{{"topic analytics"}}
     T -- "group analytics-worker" --> AC[analytics-service consumer]
     AC -- "batch INSERT JSONEachRow" --> CH[("ClickHouse page_views")]
-    FE[Dashboard] -- "GET /analytics/projects/:id?range=24h|7d|30d" --> GW[api-gateway] --> API[analytics-service API]
+    FE[Dashboard] -- "GET /analytics/projects/:id?range=24h/7d/30d" --> GW[api-gateway] --> API[analytics-service API]
     API --> PG[("Postgres: ownership + deployment ids")]
     API --> CH
 ```
@@ -1132,7 +1132,7 @@ erDiagram
         text avatar_url
         text github_access_token "AES-256-GCM"
         text github_token_scopes
-        enum status "active | suspended | deactivated"
+        enum status "active / suspended / deactivated"
         timestamptz last_login_at
         int token_version
         timestamptz created_at
@@ -1152,8 +1152,8 @@ erDiagram
         text branch "default main"
         enum framework "vite"
         text root_directory "default ."
-        enum package_manager "npm | pnpm | yarn | bun"
-        enum runtime "node | bun"
+        enum package_manager "npm / pnpm / yarn / bun"
+        enum runtime "node / bun"
         text install_command
         text build_command
         text output_directory "default dist"
@@ -1167,8 +1167,8 @@ erDiagram
     DEPLOYMENTS {
         uuid id PK "uuidv7()"
         uuid project_id FK
-        enum status "queued..uploading | ready | failed | canceled"
-        enum trigger "create | manual | push"
+        enum status "queued..uploading / ready / failed / canceled"
+        enum trigger "create / manual / push"
         text branch
         text commit_sha "40-hex CHECK"
         enum framework
