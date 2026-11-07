@@ -123,83 +123,7 @@ Conventions used throughout:
 
 ## 4. System architecture
 
-```mermaid
-flowchart LR
-    subgraph Client
-        FE["React dashboard<br/>(Vite SPA)"]
-        Visitor["Site visitor"]
-        GH["GitHub"]
-    end
-
-    subgraph Edge
-        GW["api-gateway :3000"]
-        PX["proxy-service :8080<br/>*.ROOT_DOMAIN"]
-    end
-
-    subgraph Core["Core services"]
-        AUTH["auth-service :4000"]
-        PROJ["project-service :4001"]
-        RT["realtime-service :4003<br/>Socket.IO"]
-        AN["analytics-service :4004"]
-        LOGS["logs-service :4005"]
-        QD["queue-dashboard :4002"]
-    end
-
-    subgraph Workers
-        DW["deployment-worker<br/>BullMQ consumer"]
-    end
-
-    subgraph AWS
-        ECS["ECS Fargate task<br/>deployment-service"]
-        S3[("S3 bucket<br/>__outputs/&lt;deploymentId&gt;/")]
-    end
-
-    subgraph Data
-        PG[("PostgreSQL<br/>Neon")]
-        RS[("Redis")]
-        KF{{"Kafka<br/>deployment-logs<br/>analytics"}}
-        CH[("ClickHouse<br/>log_events<br/>page_views")]
-    end
-
-    FE -- "HTTPS + WebSocket" --> GW
-    GH -- "push webhooks" --> GW
-    GW --> AUTH & PROJ & AN & LOGS
-    GW -- "WS upgrade /socket.io" --> RT
-
-    AUTH --> PG & RS
-    AUTH -- "OAuth / API" --> GH
-    PROJ --> PG & RS
-    PROJ -- "REST API" --> GH
-    PROJ -- "internal token API" --> AUTH
-    PROJ -- "enqueue job" --> RS
-    PROJ -- "StopTask / delete outputs" --> ECS & S3
-
-    DW -- "consume job, lock" --> RS
-    DW --> PG
-    DW -- "internal token API" --> AUTH
-    DW -- "RunTask" --> ECS
-
-    ECS -- "clone" --> GH
-    ECS -- "status transitions" --> PG
-    ECS -- "upload build output" --> S3
-    ECS -- "log events" --> KF
-    ECS -- "release lock" --> RS
-
-    KF -- "group realtime-service" --> RT
-    KF -- "group log-worker" --> LOGS
-    KF -- "group analytics-worker" --> AN
-    RT <-- "pub/sub adapter" --> RS
-    RT --> PG
-    LOGS --> CH & PG
-    AN --> CH & PG
-
-    Visitor --> PX
-    PX --> PG
-    PX -- "GetObject" --> S3
-    PX -- "page views" --> KF
-
-    QD --> RS
-```
+![System architecture](docs/diagrams/01-system-architecture.svg)
 
 ### Communication patterns
 
@@ -238,27 +162,7 @@ The gateway is the **only** public entry point for the dashboard and for GitHub 
 
 ### 6.1 Middleware pipeline
 
-```mermaid
-flowchart TD
-    A[Incoming request] --> B["helmet + compression<br/>trust proxy, no x-powered-by"]
-    B --> C["CORS<br/>allow-list from CORS_ORIGIN, credentials"]
-    C --> D["pino-http request logger<br/>reuse or mint x-request-id"]
-    D --> E{"GET/HEAD?"}
-    E -- yes --> F["readRateLimiter<br/>1500 / 15 min / IP"]
-    E -- no --> G["rateLimiter<br/>300 / 15 min / IP"]
-    F --> H["bodyLimit<br/>Content-Length > 64 KB → 413<br/>(webhooks exempt)"]
-    G --> H
-    H --> I{Route}
-    I -- "/auth/*" --> J["credentialRateLimiter on<br/>/auth/github, /callback, /refresh<br/>20 / 15 min"]
-    J --> K[AuthenticateMiddleware]
-    I -- "/projects/*, /analytics/*, /deployment/*" --> K
-    I -- "/webhooks/*" --> W["webhookRateLimiter 600/min<br/>bodyLimit 5 MB"]
-    I -- "/socket.io/*" --> S["WS proxy<br/>auth done in the Socket.IO handshake"]
-    K --> P["Service proxy<br/>strip + inject x-user-id / x-session-id<br/>x-request-id, timeout, streaming body cap"]
-    W --> P
-    S --> RT[realtime-service]
-    P --> U[Upstream service]
-```
+![API gateway middleware pipeline](docs/diagrams/02-gateway-middleware-pipeline.svg)
 
 ### 6.2 Authentication at the edge
 
@@ -300,38 +204,7 @@ project-service, analytics-service and logs-service authenticate requests by val
 
 ### 7.1 GitHub OAuth with PKCE
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant B as Browser
-    participant G as api-gateway
-    participant A as auth-service
-    participant R as Redis
-    participant GH as GitHub
-    participant DB as Postgres
-
-    B->>G: GET /auth/github
-    G->>A: proxy
-    A->>A: state = random 32B, verifier = random 32B<br/>challenge = SHA256(verifier)
-    A->>R: SET auth:oauth-state:{state} verifier EX 600
-    A-->>B: 302 to github.com/login/oauth/authorize (scope repo read:user user:email, S256 challenge)<br/>Set-Cookie oauth_state (httpOnly, SameSite=Lax, path=/auth)
-    B->>GH: user authorizes
-    GH-->>B: 302 to /auth/github/callback?code&state
-    B->>G: GET /auth/github/callback
-    G->>A: proxy
-    A->>A: timingSafeEqual(query.state, cookie.oauth_state)
-    A->>R: GETDEL auth:oauth-state:{state} returns verifier (single use)
-    A->>GH: POST /login/oauth/access_token (code, code_verifier)
-    GH-->>A: access_token, scope
-    A->>A: require "repo" scope
-    A->>GH: GET /user and GET /user/emails
-    A->>DB: UPSERT users ON CONFLICT (github_id)<br/>github_access_token = AES-256-GCM(token)
-    A->>A: sessionId = uuid, issue access JWT (15m) + refresh JWT (7d)
-    A->>R: SET auth:refresh:{sessionId} SHA256(refresh) EX 7d
-    A-->>B: 302 to FRONTEND_URL/auth/callback<br/>Set-Cookie refresh_token (httpOnly, SameSite=Strict, path=/auth)
-    B->>G: POST /auth/refresh (cookie)
-    G-->>B: accessToken (kept in memory only)
-```
+![GitHub OAuth with PKCE](docs/diagrams/03-github-oauth-pkce.svg)
 
 Key properties:
 
@@ -361,20 +234,7 @@ redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[3]))
 return 1
 ```
 
-```mermaid
-flowchart TD
-    A[POST /auth/refresh with cookie] --> B{JWT valid and typ=refresh?}
-    B -- no --> X1[401 INVALID_TOKEN and clear cookie]
-    B -- yes --> C{"jti blacklisted?"}
-    C -- yes --> X2[Delete session, 401 TOKEN_REVOKED]
-    C -- no --> D{"user exists and active?"}
-    D -- no --> X3[Delete session, 401]
-    D -- yes --> E[Issue new refresh token]
-    E --> F{"Lua CAS on auth:refresh:sid"}
-    F -- "0 no session" --> X4[401 INVALID_TOKEN]
-    F -- "-1 hash mismatch: REUSE" --> X5["Delete session + blacklist old jti<br/>401 TOKEN_REVOKED"]
-    F -- "1 rotated" --> G[Issue access token, set new cookie, 200]
-```
+![Refresh token rotation with reuse detection](docs/diagrams/04-refresh-token-rotation.svg)
 
 A hash mismatch means an **older** refresh token was presented after it had already been rotated. The token was most likely stolen, so the whole session is revoked. Because the gateway checks that the session key exists on every request, all access tokens of that session also stop working immediately.
 
@@ -451,31 +311,7 @@ The key is compared as `timingSafeEqual(sha256(presented), sha256(expected))`. H
 
 ### 9.1 State machine
 
-```mermaid
-stateDiagram-v2
-    [*] --> queued: create / manual / push
-    queued --> cloning: container starts
-    cloning --> installing: clone ok (commitSha recorded)
-    installing --> building: install ok
-    building --> uploading: build ok
-    uploading --> ready: upload ok
-
-    queued --> failed: enqueue fails / launch fails / no GitHub auth / retries exhausted
-    cloning --> failed
-    installing --> failed
-    building --> failed
-    uploading --> failed
-
-    queued --> canceled: user cancels
-    cloning --> canceled
-    installing --> canceled
-    building --> canceled
-    uploading --> canceled
-
-    ready --> [*]
-    failed --> [*]
-    canceled --> [*]
-```
+![Deployment state machine](docs/diagrams/05-deployment-state-machine.svg)
 
 - **Active** statuses: `queued`, `cloning`, `installing`, `building`, `uploading`.
 - **Terminal** statuses: `ready`, `failed`, `canceled`.
@@ -484,60 +320,7 @@ stateDiagram-v2
 
 ### 9.2 End-to-end flow
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant FE as Browser
-    participant GW as api-gateway
-    participant PS as project-service
-    participant PG as Postgres
-    participant Q as Redis (BullMQ)
-    participant W as deployment-worker
-    participant AS as auth-service
-    participant ECS as ECS Fargate
-    participant C as deployment-service container
-    participant GH as GitHub
-    participant S3 as S3
-    participant K as Kafka
-
-    FE->>GW: POST /projects/:id/deployments
-    GW->>PS: proxy with x-user-id
-    PS->>AS: GET github-token (verifies GitHub auth still valid)
-    PS->>PG: BEGIN, SELECT project FOR KEY SHARE, INSERT deployment (queued, settings snapshot), COMMIT
-    PS->>Q: queue.add("deploy", {deploymentId, userId}, jobId = deploymentId)
-    PS-->>FE: 202 deployment
-
-    Q->>W: job
-    W->>PG: deployment still queued?
-    W->>Q: SET deployments:user:{userId}:active {deploymentId} NX EX 3600
-    alt lock held by another active deployment
-        W->>Q: job.moveToDelayed(now + 10s) and throw DelayedError
-    end
-    W->>AS: GET github-token
-    W->>PG: BEGIN, SELECT deployment JOIN project WHERE status=queued AND not deleted FOR KEY SHARE OF projects
-    W->>ECS: RunTask (startedBy = clientToken = deploymentId)<br/>env DEPLOYMENT_ID, USER_ID, GITHUB_TOKEN_ENCRYPTED
-    W->>PG: COMMIT
-
-    ECS->>C: start container
-    C->>K: connect idempotent producer
-    C->>PG: load deployment + project, verify queued, owner, not deleted
-    C->>PG: load and decrypt env vars
-    C->>PG: transition to cloning
-    C->>GH: shallow clone (depth 1) or fetch exact commit
-    C->>PG: transition to installing (commitSha)
-    C->>C: spawn install command (sandboxed env, timeout)
-    C->>PG: transition to building
-    C->>C: spawn build command
-    C->>PG: transition to uploading
-    C->>S3: upload output dir to __outputs/{deploymentId}/ (8 parallel)
-    C->>PG: markReady
-    loop throughout
-        C-->>K: log, step and status events (batched every 250 ms)
-    end
-    C->>K: end event, flush
-    C->>Q: Lua release-if-owner of user lock
-    C->>C: rm workspace, exit 0
-```
+![End-to-end deployment flow](docs/diagrams/06-deployment-end-to-end.svg)
 
 ### 9.3 Triggers
 
@@ -598,28 +381,7 @@ Storing the owner's id and releasing only if it matches means that a **late or d
 
 ### 11.2 Acquisition algorithm (deployment-worker)
 
-```mermaid
-flowchart TD
-    A[Job picked up] --> B{"deployment.status == queued?"}
-    B -- no --> SK["return skipped<br/>(canceled / already handled)"]
-    B -- yes --> C{"SET lock deploymentId NX EX"}
-    C -- OK --> GO[Lock acquired]
-    C -- exists --> D[holder = GET lock]
-    D --> E{"holder == this deploymentId?"}
-    E -- "yes (job retry)" --> GO
-    E -- no --> F{"holder deployment exists<br/>AND is active?"}
-    F -- yes --> DLY["job.moveToDelayed(now + 10s)<br/>throw DelayedError"]
-    F -- "no (stale)" --> G["release(holder) via Lua<br/>log 'releasing stale lock'"]
-    G --> H{"SET lock deploymentId NX EX"}
-    H -- OK --> GO
-    H -- lost race --> DLY
-    GO --> I{"GitHub token from auth-service"}
-    I -- "404 auth revoked" --> J["release lock<br/>mark failed: github authorization missing<br/>return failed"]
-    I -- "auth-service down" --> K["release lock<br/>throw so BullMQ retries with backoff"]
-    I -- ok --> L[DeploymentRunnerService.start]
-    L -- started --> M["return started<br/>(lock now owned by the container)"]
-    L -- "skipped / failed" --> N[release lock]
-```
+![Redis lock acquisition in deployment-worker](docs/diagrams/07-lock-acquisition.svg)
 
 Design points:
 
@@ -669,21 +431,7 @@ Passed as ECS container overrides:
 
 ### 12.2 Pipeline
 
-```mermaid
-flowchart LR
-    I["initialize<br/>load + verify<br/>decrypt token + env vars<br/>resolve paths"] --> C["clone<br/>status: cloning"]
-    C --> N["install<br/>status: installing"]
-    N --> B["build<br/>status: building"]
-    B --> U["upload<br/>status: uploading"]
-    U --> F["finalize<br/>status: ready"]
-    I -. error .-> X[failed]
-    C -. error .-> X
-    N -. error .-> X
-    B -. error .-> X
-    U -. error .-> X
-    F --> CL["always: rm -rf workspace<br/>end event, flush Kafka<br/>release lock, exit"]
-    X --> CL
-```
+![Build container pipeline](docs/diagrams/08-build-pipeline.svg)
 
 Each step emits `step started`, `step completed` or `step failed` events with durations. Each status transition emits a `status` event.
 
@@ -735,26 +483,7 @@ This is the most involved part of the system: build output has to reach the brow
 
 ### 13.1 Overview
 
-```mermaid
-flowchart LR
-    subgraph Fargate["ECS Fargate task"]
-        P["child process<br/>stdout / stderr"] --> RL[readline]
-        RL --> COL["DeploymentLogCollector<br/>sanitize, redact, truncate<br/>sequence++, buffer"]
-        COL -- "batch ≤500 every 250 ms" --> PR["Kafka producer<br/>idempotent, acks=all, zstd"]
-    end
-
-    PR --> T{{"topic deployment-logs<br/>key = deploymentId"}}
-
-    T -- "group realtime-service" --> RT1["realtime-service #1"]
-    T -- "group realtime-service" --> RT2["realtime-service #N"]
-    RT1 <-- "Redis pub/sub adapter" --> RT2
-    RT1 -- "io.to('deployment:id').emit" --> WS1((Browser sockets))
-    RT2 --> WS1
-
-    T -- "group log-worker" --> LS["logs-service consumer"]
-    LS -- "batch insert JSONEachRow" --> CH[("ClickHouse<br/>log_events")]
-    WS2((Browser)) -- "GET /deployment/:id/logs?after=seq" --> GW[api-gateway] --> LSAPI["logs-service API"] --> CH
-```
+![Realtime log pipeline](docs/diagrams/09-realtime-log-pipeline.svg)
 
 The topic is consumed by **two independent consumer groups**. Each group gets every message: one group streams to browsers and the other stores the history.
 
@@ -820,31 +549,7 @@ TLS (CA pinned via ssl.ca.location, hostname verification) + SASL SCRAM-SHA-256/
 
 ### 13.4 Live fan-out: realtime-service
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant B as Browser
-    participant G as api-gateway
-    participant R as realtime-service
-    participant RD as Redis
-    participant PG as Postgres
-    participant K as Kafka
-
-    B->>G: WS upgrade /socket.io (auth.token = access JWT)
-    G->>R: proxy upgrade
-    R->>R: verify JWT (HS256, iss, aud, typ=access)
-    R->>RD: EXISTS blacklist jti, EXISTS session sid
-    R-->>B: connected (timer set to token exp)
-    B->>R: emit deployment:subscribe {deploymentId} with ack
-    R->>R: zod: UUID? subscriptions < 10?
-    R->>PG: deployment JOIN project WHERE user owns AND not deleted
-    R->>R: socket.join("deployment:{id}")
-    R-->>B: ack {ok:true, data:{deploymentId, status}}
-    K->>R: eachBatch (consumer group realtime-service)
-    R->>RD: adapter publishes to room across all replicas
-    R-->>B: deployment:log {deploymentId, sequence, type, level, step, source, phase, status, message, timestamp}
-    Note over R,B: when exp is reached the server emits auth:expired and disconnects
-```
+![Realtime subscription and live fan-out](docs/diagrams/10-realtime-subscription.svg)
 
 - **Authentication in the handshake.** The token comes from `socket.handshake.auth.token`. Failures are rejected with structured `data.code` values (`UNAUTHORIZED`, `INVALID_TOKEN`, `SERVICE_UNAVAILABLE`) so the client can tell auth errors apart from outages.
 - **Token expiry.** A per-socket timer fires at the JWT's `exp`, emits `auth:expired` and disconnects. The client fetches a fresh access token through `/auth/refresh` and reconnects, rate-limited to one re-auth every 10 s.
@@ -901,29 +606,7 @@ The service fetches `limit + 1` rows to compute `hasMore` and returns `{ items, 
 
 The frontend's `DeploymentLogStore` combines the two sources so that none of the race conditions between "history" and "live" lose or duplicate a line:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant UI as DeploymentLogStore
-    participant WS as realtime (socket)
-    participant API as logs-service
-
-    UI->>UI: buffering = true
-    UI->>WS: deployment:subscribe (subscribe FIRST)
-    WS-->>UI: ack ok, current status
-    WS-->>UI: live events while history loads, kept in buffer (Map by sequence)
-    UI->>API: GET logs?after=lastSeq
-    API-->>UI: history page(s)
-    loop while min(buffer.seq) > lastHistorySeq + 1 (gap)
-        UI->>API: wait and fetch again (logs-service may lag behind realtime)
-    end
-    opt status terminal but no end event yet
-        UI->>API: retry until the end event is persisted
-    end
-    UI->>UI: entries = mergeBySequence(history, buffer), buffering = false
-    WS-->>UI: further events appended directly, skipping sequences already seen
-    WS-->>UI: type=end, invalidate deployment and project queries, detach
-```
+![Gap-free merge of history and live logs](docs/diagrams/11-gap-free-log-merge.svg)
 
 - **Subscribe before fetching.** Subscribing first guarantees that any event emitted while history is loading is caught in the buffer.
 - **Dedupe by `sequence`** with a `Set<number>` of known sequences. Out-of-order arrivals trigger a sorted merge, and in-order arrivals are a cheap `concat`.
@@ -939,29 +622,7 @@ sequenceDiagram
 
 `POST /projects/:id/deployments/:deploymentId/cancel`
 
-```mermaid
-sequenceDiagram
-    participant PS as project-service
-    participant PG as Postgres
-    participant Q as BullMQ
-    participant ECS as ECS
-    participant C as container
-    participant R as Redis
-
-    PS->>PG: UPDATE status=canceled, finished_at=now()<br/>WHERE id AND project AND status IN (active) RETURNING
-    alt no row updated
-        PS-->>PS: 409 DEPLOYMENT_NOT_CANCELABLE
-    end
-    par
-        PS->>Q: queue.remove(deploymentId) (if still waiting or delayed)
-    and
-        PS->>ECS: ListTasks startedBy=deploymentId (RUNNING + PENDING), then StopTask each
-    end
-    ECS-->>C: SIGTERM
-    C->>PG: markFailed: no-op, status is already terminal (CAS)
-    C->>R: release lock (owner check)
-    PS->>R: release lock (owner check, idempotent)
-```
+![Cancel a deployment](docs/diagrams/12-cancel-deployment.svg)
 
 - The `canceled` status is written **first**, so whatever the worker or container does next sees a terminal state and backs off.
 - `startedBy = deploymentId` on `RunTask` is what allows the task to be found later without storing task ARNs.
@@ -997,27 +658,7 @@ On project creation, or explicitly with `POST /projects/:id/webhook`:
 
 ### 15.2 Delivery handling
 
-```mermaid
-flowchart TD
-    A["POST /webhooks/github/projects/:projectId<br/>(gateway: no JWT, 600/min, 5 MB)"] --> B["project-service: express.raw()<br/>body kept as Buffer"]
-    B --> C{"project active with webhook secret?"}
-    C -- no --> X1[404]
-    C -- yes --> D{"HMAC-SHA256(raw body, decrypted secret)<br/>timingSafeEqual x-hub-signature-256"}
-    D -- mismatch --> X2[401 INVALID_WEBHOOK_SIGNATURE]
-    D -- ok --> E{x-github-event}
-    E -- ping --> P[200 pong]
-    E -- other --> IG1[202 ignored]
-    E -- push --> F["zod-parse push payload"]
-    F --> G{"repo id matches?<br/>ref == refs/heads/branch?<br/>after is a real 40-hex SHA,<br/>not zero, not deleted?"}
-    G -- no --> IG2[202 ignored with reason]
-    G -- yes --> H{"SET webhooks:delivery:id 1 NX EX 86400"}
-    H -- exists --> IG3[202 already processed]
-    H -- OK --> I{"sender is repo owner OR<br/>GET /collaborators/:login = 204"}
-    I -- no --> IG4[202 ignored: untrusted pusher]
-    I -- yes --> J["createForProject(trigger=push, commitSha=after)<br/>enqueue"]
-    J --> K[202 queued with deploymentId]
-    J -. throws .-> L["DEL delivery key so a GitHub redelivery can retry"]
-```
+![GitHub webhook delivery handling](docs/diagrams/13-webhook-delivery.svg)
 
 Notable details:
 
@@ -1034,27 +675,7 @@ proxy-service serves user sites on wildcard subdomains of `ROOT_DOMAIN`.
 
 ### 16.1 Request flow
 
-```mermaid
-flowchart TD
-    A["GET https://brave-otter.example.com/about"] --> B{"Host ends with .ROOT_DOMAIN<br/>and has exactly one label?"}
-    B -- no --> N[next: /health, /docs or 404]
-    B -- yes --> M{"GET or HEAD?"}
-    M -- no --> X405["405 Allow: GET, HEAD"]
-    M -- yes --> R["DeploymentResolver.resolve(label)<br/>in-memory cache, TTL 15 s, max 10k labels"]
-    R --> L{label shape}
-    L -- "UUID" --> R1["deployment by id<br/>status=ready, project not deleted"]
-    L -- "adjective-noun slug" --> R2["latest ready deployment of project<br/>ORDER BY finished_at DESC"]
-    L -- "other" --> X404a[404]
-    R1 --> P
-    R2 --> P["toRelativePath: decode, reject . .. backslash NUL<br/>'/' → index.html, 'dir/' → dir/index.html"]
-    P --> S3["S3 GetObject __outputs/id/path<br/>IfNoneMatch forwarded"]
-    S3 -- 304 --> NM[304 Not Modified]
-    S3 -- NoSuchKey and no extension --> SPA["SPA fallback: index.html"]
-    S3 -- NoSuchKey with extension --> X404b[404 File not found]
-    S3 -- ok --> OUT["stream body via pipeline()<br/>Content-Type, ETag, Last-Modified,<br/>Cache-Control, X-Deployment-Id, nosniff"]
-    OUT --> AV{"served .html?"}
-    AV -- yes --> KP["fire-and-forget page view to Kafka 'analytics'"]
-```
+![proxy-service request flow](docs/diagrams/14-proxy-request-flow.svg)
 
 ### 16.2 Caching strategy
 
@@ -1074,15 +695,7 @@ A deployment's files are written under a unique prefix (`__outputs/<deploymentId
 
 ## 17. Analytics pipeline
 
-```mermaid
-flowchart LR
-    PX[proxy-service] -- "{site, deploymentId, route}<br/>key = deploymentId, acks=1" --> T{{"topic analytics"}}
-    T -- "group analytics-worker" --> AC[analytics-service consumer]
-    AC -- "batch INSERT JSONEachRow" --> CH[("ClickHouse page_views")]
-    FE[Dashboard] -- "GET /analytics/projects/:id?range=24h/7d/30d" --> GW[api-gateway] --> API[analytics-service API]
-    API --> PG[("Postgres: ownership + deployment ids")]
-    API --> CH
-```
+![Analytics pipeline](docs/diagrams/15-analytics-pipeline.svg)
 
 - **Producer** (proxy-service): one lazily created shared producer, `acks: 1`, fire-and-forget. A failed publish is logged and never affects the visitor's response. The route is normalised (trailing slash removed) and capped at 2048 characters. Only successfully streamed **HTML** responses count as page views.
 - **Consumer**: the same batch, validate (`pageViewEventSchema` from `@repo/contracts`), insert, and on error wait 1 s, heartbeat and rethrow, giving at-least-once delivery.
@@ -1117,83 +730,7 @@ For `range ∈ {24h, 7d, 30d}` (H = 24, 168 or 720 hours):
 
 ### 18.1 PostgreSQL
 
-```mermaid
-erDiagram
-    USERS ||--o{ PROJECTS : "owns (logical user_id, separate service)"
-    PROJECTS ||--o{ DEPLOYMENTS : "has (FK, ON DELETE CASCADE)"
-    PROJECTS ||--o{ PROJECT_ENVIRONMENT_VARIABLES : "has (FK, ON DELETE CASCADE)"
-
-    USERS {
-        uuid id PK "uuidv7()"
-        bigint github_id UK
-        text github_login
-        text name
-        text email "lowercase CHECK"
-        text avatar_url
-        text github_access_token "AES-256-GCM"
-        text github_token_scopes
-        enum status "active / suspended / deactivated"
-        timestamptz last_login_at
-        int token_version
-        timestamptz created_at
-        timestamptz updated_at "trigger"
-        timestamptz deleted_at
-    }
-
-    PROJECTS {
-        uuid id PK "uuidv7()"
-        uuid user_id
-        bigint github_repository_id
-        boolean private
-        text slug UK "adjective-noun CHECK"
-        text name "1..100 CHECK"
-        text description
-        text repository_url
-        text branch "default main"
-        enum framework "vite"
-        text root_directory "default ."
-        enum package_manager "npm / pnpm / yarn / bun"
-        enum runtime "node / bun"
-        text install_command
-        text build_command
-        text output_directory "default dist"
-        bigint github_webhook_id "paired CHECK"
-        text github_webhook_secret "AES-256-GCM"
-        timestamptz created_at
-        timestamptz updated_at "trigger"
-        timestamptz deleted_at "soft delete"
-    }
-
-    DEPLOYMENTS {
-        uuid id PK "uuidv7()"
-        uuid project_id FK
-        enum status "queued..uploading / ready / failed / canceled"
-        enum trigger "create / manual / push"
-        text branch
-        text commit_sha "40-hex CHECK"
-        enum framework
-        text root_directory "snapshot"
-        enum package_manager "snapshot"
-        enum runtime "snapshot"
-        text install_command "snapshot"
-        text build_command "snapshot"
-        text output_directory "snapshot"
-        text error_message "max 1000"
-        timestamptz started_at
-        timestamptz finished_at
-        timestamptz created_at
-        timestamptz updated_at "trigger"
-    }
-
-    PROJECT_ENVIRONMENT_VARIABLES {
-        uuid id PK
-        uuid project_id FK
-        text key "UK with project_id, format CHECK"
-        text value "AES-256-GCM"
-        timestamptz created_at
-        timestamptz updated_at "trigger"
-    }
-```
+![PostgreSQL data model](docs/diagrams/16-postgres-data-model.svg)
 
 **Indexes**
 
