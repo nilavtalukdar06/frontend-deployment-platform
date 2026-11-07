@@ -73,10 +73,10 @@ const defaultValues: ConfigureProjectValues = {
 function ConfigureSkeleton() {
   return (
     <div className="mx-auto w-full max-w-5xl" aria-busy="true">
-      <Card className="gap-8 p-6 sm:p-10">
+      <Card className="gap-6 p-5 sm:p-8">
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-24 w-full rounded-lg" />
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Skeleton className="h-4 w-16" />
             <Skeleton className="h-10 w-full" />
@@ -89,7 +89,7 @@ function ConfigureSkeleton() {
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-36 w-full rounded-lg" />
         <Skeleton className="h-36 w-full rounded-lg" />
-        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-10 w-full" />
       </Card>
     </div>
   );
@@ -115,7 +115,7 @@ function CommandOverrideField({
   return (
     <Field data-invalid={error ? true : undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <InputGroup className="h-12">
+      <InputGroup className="h-10">
         <InputGroupInput
           id={id}
           placeholder={placeholder}
@@ -212,16 +212,16 @@ function ConfigureProjectForm({
 
   return (
     <form onSubmit={onSubmit} noValidate>
-      <Card className="gap-8 p-6 sm:p-10">
-        <h1 className="text-[40px] leading-tight font-medium tracking-tight">
+      <Card className="gap-6 p-5 sm:p-8">
+        <h1 className="text-3xl leading-9 font-semibold tracking-tight">
           New project
         </h1>
 
-        <div className="flex flex-col gap-2 rounded-lg bg-muted px-6 py-5">
+        <div className="flex flex-col gap-2 rounded-lg bg-muted px-5 py-4">
           <span className="text-label text-muted-foreground">
             Importing from GitHub
           </span>
-          <span className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <a
               href={repository.url}
               target="_blank"
@@ -239,10 +239,10 @@ function ConfigureProjectForm({
         </div>
 
         <FieldGroup className="gap-3">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field>
               <FieldLabel>Owner</FieldLabel>
-              <div className="flex h-12 items-center gap-3 rounded-md border border-input bg-card px-4 text-sm">
+              <div className="flex h-10 items-center gap-3 rounded-md border border-input bg-card px-4 text-sm">
                 <UserAvatar className="size-6" />
                 <span className="flex-1 truncate">{user.githubLogin}</span>
                 <Badge variant="outline">Hobby</Badge>
@@ -254,7 +254,7 @@ function ConfigureProjectForm({
                 id="project-name"
                 value={repository.name}
                 readOnly
-                className="h-12 text-muted-foreground"
+                className="h-10 text-muted-foreground"
               />
             </Field>
           </div>
@@ -266,12 +266,12 @@ function ConfigureProjectForm({
 
         <Separator />
 
-        <FieldGroup className="gap-8">
+        <FieldGroup className="gap-6">
           <Field>
             <FieldLabel htmlFor="framework-preset">
               Application preset
             </FieldLabel>
-            <FrameworkPreset id="framework-preset" />
+            <FrameworkPreset id="framework-preset" className="h-10" />
           </Field>
 
           <CollapsibleSection title="Build and output settings">
@@ -292,7 +292,7 @@ function ConfigureProjectForm({
                   )}
                 />
               </Field>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <CommandOverrideField
                   id="install-command"
                   label="Install command"

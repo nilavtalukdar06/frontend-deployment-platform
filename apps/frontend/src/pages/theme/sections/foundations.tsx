@@ -68,8 +68,8 @@ const icons: { name: string; icon: LucideIcon; usage: string }[] = [
   { name: "ExternalLink", icon: ExternalLink, usage: "Domain link" },
   { name: "ArrowUpRight", icon: ArrowUpRight, usage: "Visit" },
   { name: "LoaderCircle", icon: LoaderCircle, usage: "Building spinner" },
-  { name: "CircleCheck", icon: CircleCheck, usage: "Pipeline step done" },
-  { name: "CircleDashed", icon: CircleDashed, usage: "Pipeline step pending" },
+  { name: "CircleCheck", icon: CircleCheck, usage: "Completed, success" },
+  { name: "CircleDashed", icon: CircleDashed, usage: "Pending" },
   { name: "Copy", icon: Copy, usage: "Copy id, copy logs" },
   { name: "TriangleAlert", icon: TriangleAlert, usage: "Log warnings" },
   { name: "Ban", icon: Ban, usage: "Cancel deployment" },
@@ -133,7 +133,7 @@ function TypographySection() {
         {typeScale.map((item) => (
           <div
             key={item.name}
-            className="grid grid-cols-1 items-center gap-2 border-b border-border px-5 py-4 last:border-b-0 md:grid-cols-[200px_1fr]"
+            className="grid grid-cols-1 items-center gap-2 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[200px_1fr]"
           >
             <div className="flex flex-col">
               <span className="text-sm font-medium">{item.name}</span>
@@ -178,7 +178,7 @@ function ShapeSection() {
         </div>
       </Specimen>
       <Specimen label="Spacing scale">
-        <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
           {spacingScale.map((space) => (
             <div key={space} className="flex items-center gap-4">
               <span className="w-12 font-mono text-xs text-muted-foreground">
@@ -197,7 +197,7 @@ function ShapeSection() {
           {layoutMetrics.map((metric) => (
             <div
               key={metric.name}
-              className="flex items-center justify-between gap-4 bg-card px-5 py-3 text-sm"
+              className="flex items-center justify-between gap-4 bg-card px-4 py-3 text-sm"
             >
               <span className="text-muted-foreground">{metric.name}</span>
               <span className="font-mono text-code">{metric.value}</span>
@@ -217,7 +217,7 @@ function IconsSection() {
       description="Lucide outline icons at 16px for the interface, plus the Vercel triangle and the GitHub mark."
     >
       <Specimen label="Brand">
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-wrap items-center gap-4">
           <span className="flex size-15 items-center justify-center rounded-2xl border border-border-strong bg-card">
             <VercelLogo className="h-5.5 w-6.25 text-foreground" />
           </span>

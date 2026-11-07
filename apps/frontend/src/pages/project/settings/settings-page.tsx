@@ -31,11 +31,11 @@ export default function SettingsPage() {
   }, [hash]);
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-[32px] leading-tight font-medium tracking-tight">
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl leading-8 font-semibold tracking-tight">
         Project settings
       </h1>
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-8">
         <nav
           aria-label="Settings sections"
           className="flex gap-1 overflow-x-auto lg:sticky lg:top-24 lg:flex-col lg:self-start"
@@ -45,7 +45,7 @@ export default function SettingsPage() {
               key={section.id}
               href={`#${section.id}`}
               className={cn(
-                "flex h-9 shrink-0 items-center rounded-md px-3 text-sm whitespace-nowrap transition-colors hover:bg-accent",
+                "flex h-8 shrink-0 items-center rounded-md px-3 text-sm whitespace-nowrap transition-colors hover:bg-accent",
                 section.destructive
                   ? "text-destructive"
                   : "text-muted-foreground hover:text-foreground",
@@ -58,7 +58,7 @@ export default function SettingsPage() {
             </a>
           ))}
         </nav>
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           <GeneralSection project={project} />
           <BuildSection project={project} />
           <GitSection project={project} />

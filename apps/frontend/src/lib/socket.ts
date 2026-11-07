@@ -3,7 +3,7 @@ import { env } from "@/config/env";
 import { getAccessToken } from "@/lib/auth";
 import { queryClient } from "@/lib/query-client";
 import { sessionQueryOptions } from "@/lib/session";
-import type { DeploymentLogMessage } from "@/features/logs/types";
+import type { DeploymentLogMessage } from "@/features/deployment-logs/types";
 import type { DeploymentStatus } from "@/features/deployments/types";
 
 export type SubscribeAck =

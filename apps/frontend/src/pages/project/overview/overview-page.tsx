@@ -13,7 +13,7 @@ import {
 import { useAuthenticatedSession } from "@/components/auth/session-context";
 import { GithubIcon } from "@/components/brand/github-icon";
 import { UserAvatar } from "@/components/deploy/app-shell";
-import { SourceInfo, TriggerLabel } from "@/components/deploy/deployment-meta";
+import { SourceInfo } from "@/components/deploy/deployment-meta";
 import { StatusLabel } from "@/components/deploy/status-dot";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
@@ -54,7 +54,7 @@ function BuildingStrip({
   return (
     <Link
       to={`/projects/${projectId}/deployments/${deployment.id}`}
-      className="flex h-10.25 items-center justify-between gap-4 border-b border-warning-border bg-warning-surface px-6 text-sm text-warning transition-colors hover:bg-warning-surface/70"
+      className="flex h-9 items-center justify-between gap-4 border-b border-warning-border bg-warning-surface px-5 text-sm text-warning transition-colors hover:bg-warning-surface/70"
     >
       <span className="flex min-w-0 items-center gap-3">
         <Spinner className="size-3.5" />
@@ -104,7 +104,7 @@ function ProductionDetails({
   const now = useNow(isActiveStatus(deployment.status));
 
   return (
-    <dl className="grid grid-cols-2 content-start gap-x-8 gap-y-5 text-sm">
+    <dl className="grid grid-cols-2 content-start gap-x-6 gap-y-4 text-sm">
       <DetailItem label="Deployment" className="col-span-2">
         <Link
           to={`/projects/${project.id}/deployments/${deployment.id}`}
@@ -139,17 +139,12 @@ function ProductionDetails({
         </span>
       </DetailItem>
       <DetailItem label="Source" className="col-span-2">
-        <span className="flex flex-col gap-1.5">
-          <SourceInfo
-            branch={deployment.branch}
-            commitSha={deployment.commitSha}
-            repositoryUrl={project.repositoryUrl}
-          />
-          <TriggerLabel
-            trigger={deployment.trigger}
-            className="text-label text-muted-foreground"
-          />
-        </span>
+        <SourceInfo
+          branch={deployment.branch}
+          commitSha={deployment.commitSha}
+          repositoryUrl={project.repositoryUrl}
+          trigger={deployment.trigger}
+        />
       </DetailItem>
     </dl>
   );
@@ -157,16 +152,16 @@ function ProductionDetails({
 
 function ProductionSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-[minmax(0,413px)_1fr]">
+    <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-[minmax(0,413px)_1fr]">
       <Skeleton className="aspect-413/258 w-full rounded-lg" />
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-4">
         <Skeleton className="h-10 w-80" />
         <Skeleton className="h-10 w-64" />
-        <div className="flex gap-8">
+        <div className="flex gap-6">
           <Skeleton className="h-10 w-32" />
           <Skeleton className="h-10 w-40" />
         </div>
-        <Skeleton className="h-12 w-36" />
+        <Skeleton className="h-10 w-36" />
       </div>
     </div>
   );
@@ -184,13 +179,13 @@ function ProductionDeploymentCard({ project }: { project: Project }) {
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-3">
         <h2 className="text-title font-medium">Production deployment</h2>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon-lg"
-            className="size-8.5"
+            className="size-8"
             aria-label="Open repository on GitHub"
             nativeButton={false}
             render={
@@ -237,7 +232,7 @@ function ProductionDeploymentCard({ project }: { project: Project }) {
       {isPending ? (
         <ProductionSkeleton />
       ) : isError ? (
-        <div className="p-6">
+        <div className="p-5">
           <ErrorState
             error={error}
             title="Couldn't load deployments"
@@ -246,7 +241,7 @@ function ProductionDeploymentCard({ project }: { project: Project }) {
           />
         </div>
       ) : deployments.length === 0 ? (
-        <div className="p-6">
+        <div className="p-5">
           <EmptyState
             icon={RotateCw}
             title="No deployments yet"
@@ -262,7 +257,7 @@ function ProductionDeploymentCard({ project }: { project: Project }) {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-[minmax(0,413px)_1fr]">
+        <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-[minmax(0,413px)_1fr]">
           <SitePreview
             url={current ? project.url : null}
             title={project.name}
@@ -285,7 +280,7 @@ function ProductionDeploymentCard({ project }: { project: Project }) {
           )}
         </div>
       )}
-      <div className="flex items-center gap-3 border-t border-border px-6 py-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground">
         {project.autoDeploy ? (
           <>
             <Zap className="size-4 shrink-0 text-success" />
@@ -325,7 +320,7 @@ function AnalyticsSummaryCard({ project }: { project: Project }) {
   const peak = values.reduce((max, point) => Math.max(max, point.views), 0);
 
   return (
-    <Card className="gap-4 p-5">
+    <Card className="gap-4 p-4">
       <div className="flex items-center justify-between">
         <Link
           to={`/projects/${project.id}/analytics`}
@@ -391,7 +386,7 @@ function KeyValueCard({
   rows: { label: string; value: ReactNode; mono?: boolean }[];
 }) {
   return (
-    <Card className="gap-4 p-5">
+    <Card className="gap-4 p-4">
       <div className="flex items-center justify-between">
         <span className="text-title font-medium">{title}</span>
         {action}
@@ -422,10 +417,10 @@ export default function OverviewPage() {
   const project = useProject();
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-[32px] leading-tight font-medium tracking-tight">
+          <h1 className="text-2xl leading-8 font-semibold tracking-tight">
             {project.name}
           </h1>
           {project.autoDeploy ? (
@@ -441,7 +436,7 @@ export default function OverviewPage() {
 
       <ProductionDeploymentCard project={project} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <AnalyticsSummaryCard project={project} />
         <KeyValueCard
           title="Build settings"

@@ -32,7 +32,7 @@ import {
 } from "@/pages/theme/sections/controls";
 import { CardsSection } from "@/pages/theme/sections/cards";
 import { ListsSection } from "@/pages/theme/sections/lists";
-import { PipelineSection } from "@/pages/theme/sections/pipeline";
+import { BuildLogsSection } from "@/pages/theme/sections/build-logs";
 import { ChartsSection } from "@/pages/theme/sections/charts";
 import { NavigationSection } from "@/pages/theme/sections/navigation";
 import { ScreensSection } from "@/pages/theme/sections/screens";
@@ -48,7 +48,7 @@ const navigation: { id: string; label: string; icon: ReactNode }[] = [
   { id: "alerts", label: "Alerts and banners", icon: <Bell /> },
   { id: "cards", label: "Cards and panels", icon: <Grid2x2 /> },
   { id: "lists", label: "Lists and tables", icon: <ListTree /> },
-  { id: "pipeline", label: "Pipeline and logs", icon: <SquareTerminal /> },
+  { id: "build-logs", label: "Build logs", icon: <SquareTerminal /> },
   { id: "charts", label: "Charts", icon: <ChartColumn /> },
   { id: "navigation", label: "Navigation", icon: <Compass /> },
   { id: "screens", label: "Auth screen", icon: <LogIn /> },
@@ -88,7 +88,7 @@ export default function ThemePage() {
         <AlertsSection />
         <CardsSection />
         <ListsSection />
-        <PipelineSection />
+        <BuildLogsSection />
         <ChartsSection />
         <NavigationSection />
         <ScreensSection />

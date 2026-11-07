@@ -100,7 +100,7 @@ function SidebarUser() {
 function AppSidebar({ children }: { children: ReactNode }) {
   return (
     <Sidebar className="border-r border-border bg-sidebar">
-      <SidebarHeader className="h-15.25 shrink-0 flex-row items-center gap-3 border-b border-border px-5">
+      <SidebarHeader className="h-14 shrink-0 flex-row items-center gap-3 border-b border-border px-4">
         <Link to="/" className="flex items-center gap-3">
           <VercelLogo className="h-4 w-4.5 text-foreground" />
           <span className="text-title font-medium">Deploy</span>
@@ -122,7 +122,7 @@ function AppHeader({ title }: { title: ReactNode }) {
   return (
     <header
       data-slot="header"
-      className="sticky top-0 z-20 flex h-15.25 shrink-0 items-center justify-between gap-4 border-b border-border bg-background/85 px-6 backdrop-blur"
+      className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-background/85 px-5 backdrop-blur"
     >
       <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
         <SidebarTrigger className="-ml-1 md:hidden" />
@@ -150,7 +150,7 @@ function AppShell({
       <AppSidebar>{nav}</AppSidebar>
       <SidebarInset>
         <AppHeader title={title} />
-        <div className="px-6 py-8 sm:px-8">{children}</div>
+        <div className="px-5 py-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

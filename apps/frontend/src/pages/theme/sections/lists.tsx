@@ -56,7 +56,7 @@ function DeploymentRow({ deployment }: { deployment: DemoDeployment }) {
   const TriggerIcon = triggerIcons[deployment.trigger];
 
   return (
-    <div className="relative grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_200px] items-center gap-6 border-b border-border px-5 py-4 last:border-b-0">
+    <div className="relative grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_200px] items-center gap-4 border-b border-border px-4 py-3 last:border-b-0">
       <div className="flex flex-col gap-1">
         <span className="flex items-center gap-2.5 font-mono text-sm">
           {deployment.id}
@@ -118,7 +118,7 @@ function ListsSection() {
       description="Divided rows inside a bordered panel: the repository importer and the deployments table with its action menu."
     >
       <Specimen label="Import Git repository">
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <h3 className="text-hero font-medium">Let’s build something new</h3>
             <p className="text-sm text-muted-foreground">
@@ -130,7 +130,7 @@ function ListsSection() {
             Import Git repository
           </h4>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
-            <div className="flex h-10.5 items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
+            <div className="flex h-10 items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
               <Avatar className="size-5">
                 <AvatarFallback className="text-[10px]">N</AvatarFallback>
               </Avatar>
@@ -138,14 +138,14 @@ function ListsSection() {
             </div>
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-subtle" />
-              <Input placeholder="Search…" className="h-10.5 pl-10" />
+              <Input placeholder="Search…" className="h-10 pl-10" />
             </div>
           </div>
           <div className="overflow-hidden rounded-xl border border-border bg-card">
             {demoRepositories.map((repository) => (
               <div
                 key={repository.name}
-                className="flex items-center gap-4 border-b border-border px-5 py-4"
+                className="flex items-center gap-4 border-b border-border px-4 py-3"
               >
                 <ProjectIcon size="sm" />
                 <div className="flex min-w-0 flex-1 flex-col">
@@ -171,14 +171,14 @@ function ListsSection() {
                 )}
               </div>
             ))}
-            <div className="flex h-13.5 items-center justify-center text-label text-muted-foreground">
+            <div className="flex h-12 items-center justify-center text-label text-muted-foreground">
               Load more repositories
             </div>
           </div>
         </div>
       </Specimen>
       <Specimen label="Deployments table">
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <div className="flex items-end justify-between">
             <div className="flex flex-col gap-1">
               <h3 className="text-heading font-medium">Deployments</h3>

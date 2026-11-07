@@ -51,7 +51,7 @@ function StatCard({
   hintClassName?: string;
 }) {
   return (
-    <Card className="gap-1 p-5">
+    <Card className="gap-1 p-4">
       <span className="text-label text-muted-foreground">{label}</span>
       <span className="truncate text-stat-lg font-medium tracking-tight">
         {value}
@@ -82,26 +82,26 @@ function changeHint(analytics: ProjectAnalytics) {
 function AnalyticsSkeleton() {
   return (
     <div
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-6"
       aria-busy="true"
       aria-label="Loading analytics"
     >
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <Card key={index} className="gap-2 p-5">
+          <Card key={index} className="gap-2 p-4">
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-9 w-28" />
             <Skeleton className="h-3 w-20" />
           </Card>
         ))}
       </div>
-      <Card className="gap-6 p-6">
+      <Card className="gap-4 p-5">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-72 w-full" />
       </Card>
-      <Card className="gap-6 p-6">
+      <Card className="gap-4 p-5">
         <Skeleton className="h-5 w-40" />
-        <div className="flex items-center gap-12">
+        <div className="flex items-center gap-8">
           <Skeleton className="size-56 rounded-full" />
           <div className="flex flex-1 flex-col gap-4">
             <Skeleton className="h-5 w-full" />
@@ -130,8 +130,8 @@ function AnalyticsContent({ analytics }: { analytics: ProjectAnalytics }) {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Page views"
           value={formatNumber(totalViews)}
@@ -183,10 +183,10 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[32px] leading-tight font-medium tracking-tight">
+          <h1 className="text-2xl leading-8 font-semibold tracking-tight">
             Analytics
           </h1>
           <p className="text-sm text-muted-foreground">

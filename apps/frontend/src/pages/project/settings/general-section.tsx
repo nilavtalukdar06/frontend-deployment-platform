@@ -98,7 +98,7 @@ function GeneralSection({ project }: { project: Project }) {
         }
       >
         <FieldGroup>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field data-invalid={errors.name ? true : undefined}>
               <FieldLabel htmlFor="settings-name">Project name</FieldLabel>
               <Input

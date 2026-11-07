@@ -22,7 +22,7 @@ function SitePreview({ url, title }: { url: string | null; title: string }) {
         src={url}
         title={`Preview of ${title}`}
         loading="lazy"
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
         tabIndex={-1}
         className="pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-25 border-0"
       />

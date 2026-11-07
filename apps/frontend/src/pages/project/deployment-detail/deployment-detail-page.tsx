@@ -27,10 +27,8 @@ import {
 import { deploymentQueryOptions } from "@/features/deployments/queries";
 import { isActiveStatus } from "@/features/deployments/status";
 import type { Deployment } from "@/features/deployments/types";
-import { BuildLogsCard } from "@/features/logs/components/build-logs-card";
-import { PipelineCard } from "@/features/logs/components/pipeline-card";
-import { derivePipeline } from "@/features/logs/pipeline";
-import { useDeploymentLogs } from "@/features/logs/use-deployment-logs";
+import { BuildLogsCard } from "@/features/deployment-logs/components/build-logs-card";
+import { useDeploymentLogs } from "@/features/deployment-logs/use-deployment-logs";
 import type { Project } from "@/features/projects/types";
 import { useNow } from "@/hooks/use-now";
 import { isNotFoundError } from "@/lib/api-error";
@@ -138,7 +136,7 @@ function DeploymentSummaryCard({
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex min-h-15 items-center justify-between gap-4 border-b border-border px-6 py-3">
+      <div className="flex min-h-12 items-center justify-between gap-4 border-b border-border px-5 py-3">
         <h1 className="text-title font-medium">Deployment</h1>
         {active ? (
           <Button variant="destructive" onClick={() => setConfirmCancel(true)}>
@@ -147,7 +145,7 @@ function DeploymentSummaryCard({
           </Button>
         ) : null}
       </div>
-      <dl className="grid grid-cols-2 gap-x-8 gap-y-6 p-6 text-sm md:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 p-5 text-sm md:grid-cols-4">
         <DetailItem label="Status">
           <StatusLabel
             status={deployment.status}
@@ -191,7 +189,7 @@ function DeploymentSummaryCard({
         </DetailItem>
       </dl>
       {deployment.status === "failed" && deployment.errorMessage ? (
-        <div className="px-6 pb-6">
+        <div className="px-5 pb-6">
           <Alert variant="destructive">
             <CircleAlert />
             <AlertTitle>Deployment failed</AlertTitle>
@@ -201,7 +199,7 @@ function DeploymentSummaryCard({
           </Alert>
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-x-24 gap-y-2 border-t border-border px-6 py-4 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-x-24 gap-y-2 border-t border-border px-5 py-3 text-sm text-muted-foreground">
         <span>
           Install{" "}
           <code className="font-mono text-code text-foreground">
@@ -236,54 +234,35 @@ function DeploymentActivity({
     deploymentId: deployment.id,
     status: deployment.status,
   });
-  const steps = derivePipeline(
-    logs.entries,
-    deployment.status,
-    deployment.errorMessage,
-  );
 
   return (
-    <>
-      <PipelineCard steps={steps} />
-      <BuildLogsCard
-        deployment={deployment}
-        phase={logs.phase}
-        entries={logs.entries}
-        error={logs.error}
-        onRetry={logs.retry}
-      />
-    </>
+    <BuildLogsCard
+      deployment={deployment}
+      phase={logs.phase}
+      entries={logs.entries}
+      error={logs.error}
+      onRetry={logs.retry}
+    />
   );
 }
 
 function DeploymentDetailSkeleton() {
   return (
     <div
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-6"
       aria-busy="true"
       aria-label="Loading deployment"
     >
       <Skeleton className="h-5 w-56" />
       <Card className="gap-0 py-0">
-        <div className="flex h-15 items-center border-b border-border px-6">
+        <div className="flex h-12 items-center border-b border-border px-5">
           <Skeleton className="h-5 w-28" />
         </div>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-6 p-6 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-5 md:grid-cols-4">
           {Array.from({ length: 8 }, (_, index) => (
             <div key={index} className="flex flex-col gap-2">
               <Skeleton className="h-3.5 w-16" />
               <Skeleton className="h-4 w-28" />
-            </div>
-          ))}
-        </div>
-      </Card>
-      <Card className="gap-6 p-6">
-        <Skeleton className="h-5 w-20" />
-        <div className="grid grid-cols-3 gap-y-6 md:grid-cols-6">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="flex flex-col items-center gap-2">
-              <Skeleton className="size-6 rounded-full" />
-              <Skeleton className="h-4 w-16" />
             </div>
           ))}
         </div>
@@ -342,7 +321,7 @@ export default function DeploymentDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <DeploymentBreadcrumb
         projectId={project.id}
         deploymentId={deployment.id}

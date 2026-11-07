@@ -69,7 +69,7 @@ function ViewsChartCard({
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
         <div className="flex flex-col gap-0.5">
           <h2 className="text-title font-medium">Page views</h2>
           <p className="text-sm text-muted-foreground">
@@ -98,7 +98,7 @@ function ViewsChartCard({
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
-      <div className="border-t border-border px-6 pt-6 pb-4">
+      <div className="border-t border-border px-5 pt-6 pb-4">
         {mode === "chart" ? (
           <ChartContainer
             config={chartConfig}

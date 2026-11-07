@@ -7,8 +7,8 @@ import { Section, Specimen } from "@/pages/theme/sections/section";
 
 function LoginPreview() {
   return (
-    <div className="bg-grid flex min-h-160 items-center justify-center overflow-hidden rounded-xl border border-border bg-black p-6">
-      <div className="flex w-95 flex-col items-center bg-black px-0 py-10">
+    <div className="bg-grid flex min-h-160 items-center justify-center overflow-hidden rounded-xl border border-border bg-black p-5">
+      <div className="flex w-95 flex-col items-center bg-black px-0 py-8">
         <span className="flex size-15 items-center justify-center rounded-2xl border border-border-strong bg-card">
           <VercelLogo className="h-5.5 w-6.25 text-foreground" />
         </span>

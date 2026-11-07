@@ -37,7 +37,7 @@ function GitSection({ project }: { project: Project }) {
         </>
       }
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border-strong px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border-strong px-4 py-3">
         <div className="flex min-w-0 items-center gap-4">
           <GithubIcon className="size-5 shrink-0" />
           <div className="flex min-w-0 flex-col">

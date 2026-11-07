@@ -40,13 +40,13 @@ function RoutesCard({
 }) {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex flex-col gap-0.5 px-6 py-5">
+      <div className="flex flex-col gap-0.5 px-5 py-4">
         <h2 className="text-title font-medium">Views by route</h2>
         <p className="text-sm text-muted-foreground">
           Share of page views, {rangeHints[range]}
         </p>
       </div>
-      <div className="flex flex-col items-center gap-12 border-t border-border p-8 md:flex-row md:p-12">
+      <div className="flex flex-col items-center gap-8 border-t border-border p-6 md:flex-row">
         <div className="relative size-56 shrink-0">
           <ChartContainer
             config={chartConfig}
@@ -93,7 +93,7 @@ function RoutesCard({
                 <TableCell>
                   <span className="flex items-center gap-3">
                     <span
-                      className="size-2.5 shrink-0 rounded-[3px]"
+                      className="size-2.5 shrink-0 rounded-sm"
                       style={{
                         backgroundColor:
                           ROUTE_COLORS[index % ROUTE_COLORS.length],

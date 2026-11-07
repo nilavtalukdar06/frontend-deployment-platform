@@ -29,7 +29,7 @@ const statusLabels = {
 
 function ProjectCard({ project }: { project: DemoProject }) {
   return (
-    <Card className="min-h-51.25 gap-4 p-5">
+    <Card className="gap-3 p-4">
       <div className="flex items-start gap-3">
         <ProjectIcon />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -52,10 +52,10 @@ function ProjectCard({ project }: { project: DemoProject }) {
           <Ellipsis className="size-4 text-muted-foreground" />
         </div>
       </div>
-      <p className="line-clamp-2 min-h-10.5 text-sm text-subtle">
+      <p className="line-clamp-2 text-label text-muted-foreground">
         {project.description}
       </p>
-      <div className="flex items-center gap-3 text-sm">
+      <div className="mt-auto flex items-center gap-3 text-sm">
         <StatusDot status={project.status} />
         <span className="font-medium">{statusLabels[project.status]}</span>
         <span className="flex items-center gap-1.5 font-mono text-code text-muted-foreground">
@@ -82,7 +82,7 @@ function StatCard({
   hint?: string;
 }) {
   return (
-    <Card className="gap-1 p-5">
+    <Card className="gap-1 p-4">
       <span className="text-label text-muted-foreground">{label}</span>
       <span className="text-stat font-medium tracking-tight">{value}</span>
       {hint && <span className="text-xs text-subtle">{hint}</span>}
@@ -100,7 +100,7 @@ function KeyValueCard({
   rows: { label: string; value: string; mono?: boolean; github?: boolean }[];
 }) {
   return (
-    <Card className="gap-4 p-5">
+    <Card className="gap-4 p-4">
       <div className="flex items-center justify-between">
         <span className="text-title font-medium">{title}</span>
         {action && <span className="text-sm text-subtle">{action}</span>}
@@ -125,10 +125,10 @@ function KeyValueCard({
 function ProductionDeploymentCard() {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
+      <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3">
         <span className="text-title font-medium">Production deployment</span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-lg" className="size-8.5">
+          <Button variant="outline" size="icon-lg" className="size-8">
             <GithubIcon />
           </Button>
           <Button variant="outline">
@@ -141,7 +141,7 @@ function ProductionDeploymentCard() {
           </Button>
         </div>
       </div>
-      <div className="flex h-10.25 items-center justify-between border-b border-border bg-warning-surface px-6 text-sm text-warning">
+      <div className="flex h-9 items-center justify-between border-b border-border bg-warning-surface px-5 text-sm text-warning">
         <span className="flex items-center gap-3">
           <span className="size-3.5 animate-spin rounded-full border-2 border-warning border-t-transparent" />
           <span>
@@ -154,7 +154,7 @@ function ProductionDeploymentCard() {
           <ChevronRight className="size-4" />
         </span>
       </div>
-      <div className="grid grid-cols-1 gap-8 p-6 lg:grid-cols-[minmax(0,413px)_1fr]">
+      <div className="grid grid-cols-1 gap-6 p-5 lg:grid-cols-[minmax(0,413px)_1fr]">
         <div className="flex aspect-413/258 items-center justify-center overflow-hidden rounded-lg border border-border-strong bg-[#fafafa] text-[#111]">
           <div className="flex w-47.5 flex-col items-center gap-2 text-[11px]">
             <span className="flex items-center gap-1.5 font-medium">
@@ -168,7 +168,7 @@ function ProductionDeploymentCard() {
             </div>
           </div>
         </div>
-        <dl className="grid grid-cols-2 content-start gap-x-8 gap-y-5 text-sm">
+        <dl className="grid grid-cols-2 content-start gap-x-6 gap-y-4 text-sm">
           <div className="col-span-2 flex flex-col gap-1.5">
             <dt className="text-label text-muted-foreground">Deployment</dt>
             <dd className="font-mono text-code">
@@ -216,7 +216,7 @@ function ProductionDeploymentCard() {
           </div>
         </dl>
       </div>
-      <div className="flex items-center gap-3 border-t border-border px-6 py-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-3 border-t border-border px-5 py-3 text-sm text-muted-foreground">
         <Zap className="size-4 text-success" />
         <span>
           To update your production deployment, push to the{" "}
@@ -231,11 +231,11 @@ function ProductionDeploymentCard() {
 function DeploymentSummaryCard() {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+      <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <span className="text-title font-medium">Deployment</span>
         <Button variant="destructive">Cancel deployment</Button>
       </div>
-      <dl className="grid grid-cols-2 gap-x-8 gap-y-6 p-6 text-sm md:grid-cols-4">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 p-5 text-sm md:grid-cols-4">
         <div className="flex flex-col gap-1.5">
           <dt className="text-label text-muted-foreground">Status</dt>
           <dd>
@@ -285,7 +285,7 @@ function DeploymentSummaryCard() {
           </dd>
         </div>
       </dl>
-      <div className="flex flex-wrap gap-x-24 gap-y-2 border-t border-border px-6 py-4 text-sm text-muted-foreground">
+      <div className="flex flex-wrap gap-x-24 gap-y-2 border-t border-border px-5 py-3 text-sm text-muted-foreground">
         <span>
           Install{" "}
           <code className="font-mono text-code text-foreground">
@@ -306,9 +306,9 @@ function DeploymentSummaryCard() {
 function SettingsGitCard() {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex flex-col gap-5 p-6">
+      <div className="flex flex-col gap-4 p-5">
         <h3 className="text-xl font-medium tracking-tight">Git</h3>
-        <div className="flex items-center justify-between rounded-lg border border-border-strong px-5 py-4">
+        <div className="flex items-center justify-between rounded-lg border border-border-strong px-4 py-3">
           <div className="flex items-center gap-4">
             <GithubIcon className="size-5" />
             <div className="flex flex-col">
@@ -326,7 +326,7 @@ function SettingsGitCard() {
           </span>
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-border bg-muted px-6 py-3">
+      <div className="flex items-center justify-between border-t border-border bg-muted px-5 py-3">
         <span className="text-sm text-subtle">
           Reinstall the webhook if it was deleted on GitHub.
         </span>
@@ -338,11 +338,11 @@ function SettingsGitCard() {
 
 function ImportSourceBox() {
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-surface px-5 py-4">
+    <div className="flex flex-col gap-2 rounded-lg bg-surface px-4 py-3">
       <span className="text-sm text-muted-foreground">
         Importing from GitHub
       </span>
-      <span className="flex items-center gap-5 text-title font-medium">
+      <span className="flex items-center gap-4 text-title font-medium">
         <span className="flex items-center gap-2.5">
           <GithubIcon className="size-4" />
           nilavtalukdar06/test-deploy
@@ -401,7 +401,7 @@ function CardsSection() {
       </Specimen>
       <Specimen label="Overview summary cards">
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <Card className="gap-3 p-5">
+          <Card className="gap-3 p-4">
             <div className="flex items-center justify-between">
               <span className="text-title font-medium">Analytics</span>
               <span className="text-sm text-subtle">24h</span>
@@ -446,7 +446,7 @@ function CardsSection() {
       <Specimen label="Deployment summary">
         <DeploymentSummaryCard />
       </Specimen>
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Specimen label="Settings git row">
           <SettingsGitCard />
         </Specimen>
@@ -455,7 +455,7 @@ function CardsSection() {
         </Specimen>
       </div>
       <Specimen label="Badge inside card header" className="flex-row gap-4">
-        <Card className="w-full gap-0 p-5">
+        <Card className="w-full gap-0 p-4">
           <div className="flex items-center gap-3">
             <span className="text-heading font-medium">dor-check</span>
             <Badge variant="success" className="px-3">

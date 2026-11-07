@@ -25,7 +25,7 @@ const SKELETON_ROWS = Array.from({ length: 5 }, (_, index) => index);
 
 function RepositoryRow({ repository }: { repository: ImportableRepository }) {
   return (
-    <div className="flex items-center gap-4 border-b border-border px-5 py-4">
+    <div className="flex items-center gap-4 border-b border-border px-4 py-3">
       <ProjectIcon size="sm" />
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-center gap-2 text-title">
@@ -74,14 +74,14 @@ function RepositoryListSkeleton() {
       {SKELETON_ROWS.map((index) => (
         <div
           key={index}
-          className="flex items-center gap-4 border-b border-border px-5 py-4 last:border-b-0"
+          className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0"
         >
           <Skeleton className="size-8 rounded-full" />
           <div className="flex flex-1 flex-col gap-2">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-3.5 w-64" />
           </div>
-          <Skeleton className="h-8.5 w-18" />
+          <Skeleton className="h-8 w-18" />
         </div>
       ))}
     </div>
@@ -127,9 +127,9 @@ export default function ImportRepositoryPage() {
   }, [shouldAutoLoad, fetchNextPage]);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 pt-6 pb-16">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 pt-6 pb-16">
       <div className="flex flex-col gap-3">
-        <h1 className="text-hero font-medium tracking-tight sm:text-[44px] sm:leading-tight">
+        <h1 className="text-3xl leading-9 font-semibold tracking-tight sm:text-4xl sm:leading-10">
           Let’s build something new
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -138,16 +138,16 @@ export default function ImportRepositoryPage() {
         </p>
       </div>
 
-      <section className="flex flex-col gap-5">
+      <section className="flex flex-col gap-4">
         <h2 className="text-xl font-medium tracking-tight">
           Import Git repository
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <div className="flex h-10.5 items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
+          <div className="flex h-10 items-center gap-3 rounded-md border border-input bg-card px-3 text-sm">
             <UserAvatar className="size-5" />
             <span className="truncate">{user.githubLogin}</span>
           </div>
-          <InputGroup className="h-10.5">
+          <InputGroup className="h-10">
             <InputGroupAddon>
               <Search />
             </InputGroupAddon>
@@ -190,7 +190,7 @@ export default function ImportRepositoryPage() {
               <RepositoryRow key={repository.id} repository={repository} />
             ))}
             {visible.length === 0 ? (
-              <p className="border-b border-border px-5 py-6 text-center text-sm text-subtle">
+              <p className="border-b border-border px-4 py-6 text-center text-sm text-subtle">
                 {deferredSearch
                   ? "No loaded repositories match your search yet."
                   : "No Vite repositories on the pages loaded so far."}
@@ -201,7 +201,7 @@ export default function ImportRepositoryPage() {
                 type="button"
                 onClick={() => void fetchNextPage()}
                 disabled={isFetchingNextPage}
-                className="flex h-13.5 w-full cursor-pointer items-center justify-center gap-2 text-label text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default"
+                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 text-label text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default"
               >
                 {isFetchingNextPage ? <Spinner /> : null}
                 {isFetchingNextPage
@@ -209,7 +209,7 @@ export default function ImportRepositoryPage() {
                   : "Load more repositories"}
               </button>
             ) : (
-              <p className="flex h-13.5 items-center justify-center text-label text-subtle">
+              <p className="flex h-12 items-center justify-center text-label text-subtle">
                 All repositories loaded
               </p>
             )}

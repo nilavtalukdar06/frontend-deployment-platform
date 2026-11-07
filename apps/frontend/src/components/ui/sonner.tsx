@@ -35,7 +35,16 @@ function Toaster(props: ToasterProps) {
       className="toaster group"
       icons={toasterIcons}
       style={toasterStyle}
-      toastOptions={{ classNames: { toast: "cn-toast text-label" } }}
+      toastOptions={{
+        classNames: {
+          toast: "cn-toast text-label",
+          description: "text-muted-foreground!",
+          actionButton:
+            "h-7! rounded-md! bg-primary! px-2.5! text-[13px]! font-medium! text-primary-foreground!",
+          cancelButton:
+            "h-7! rounded-md! border! border-input! bg-card! px-2.5! text-[13px]! font-medium! text-foreground!",
+        },
+      }}
       {...props}
     />
   );

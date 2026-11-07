@@ -262,7 +262,7 @@ function BuildSection({ project }: { project: Project }) {
         }
       >
         <FieldGroup>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {textField("branch", "Production branch", "main")}
             {textField("rootDirectory", "Root directory", ".")}
             {textField("outputDirectory", "Output directory", "dist")}

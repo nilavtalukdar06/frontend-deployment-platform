@@ -36,7 +36,7 @@ function DeploymentRow({
   const href = `/projects/${deployment.projectId}/deployments/${deployment.id}`;
 
   return (
-    <div className="relative grid animate-in grid-cols-1 items-center gap-3 border-b border-border px-5 py-4 transition-colors duration-300 fade-in last:border-b-0 hover:bg-muted/40 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_auto] md:gap-6">
+    <div className="relative grid animate-in grid-cols-1 items-center gap-3 border-b border-border px-4 py-3 transition-colors duration-300 fade-in last:border-b-0 hover:bg-muted/40 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_auto] md:gap-4">
       <div className="flex min-w-0 flex-col gap-1">
         <span className="flex items-center gap-2.5 font-mono text-sm">
           <Link

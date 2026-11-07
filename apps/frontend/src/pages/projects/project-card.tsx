@@ -91,7 +91,7 @@ function ProjectTitle({ project }: { project: Project }) {
 
 function ProjectCard({ project }: { project: Project }) {
   return (
-    <Card className="relative min-h-51.25 gap-4 p-5 transition-colors hover:border-border-strong">
+    <Card className="relative gap-3 p-4 transition-colors hover:border-border-strong">
       <div className="flex items-start gap-3">
         <ProjectIcon />
         <ProjectTitle project={project} />
@@ -100,10 +100,15 @@ function ProjectCard({ project }: { project: Project }) {
           <ProjectActionsMenu project={project} />
         </div>
       </div>
-      <p className="line-clamp-2 min-h-10.5 text-sm text-subtle">
-        {project.description ?? "No description"}
-      </p>
-      <LatestDeploymentSummary deployment={project.latestDeployment} />
+      {project.description ? (
+        <p className="line-clamp-2 text-label text-muted-foreground">
+          {project.description}
+        </p>
+      ) : null}
+      <LatestDeploymentSummary
+        deployment={project.latestDeployment}
+        className="mt-auto"
+      />
       <RepositoryPill repositoryUrl={project.repositoryUrl} />
     </Card>
   );
@@ -111,7 +116,7 @@ function ProjectCard({ project }: { project: Project }) {
 
 function ProjectRow({ project }: { project: Project }) {
   return (
-    <div className="relative grid grid-cols-1 items-center gap-3 border-b border-border px-5 py-4 transition-colors last:border-b-0 hover:bg-muted/50 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
+    <div className="relative grid grid-cols-1 items-center gap-3 border-b border-border px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/50 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_auto]">
       <div className="flex min-w-0 items-center gap-3">
         <ProjectIcon size="sm" />
         <ProjectTitle project={project} />

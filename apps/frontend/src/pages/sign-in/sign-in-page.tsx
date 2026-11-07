@@ -33,8 +33,8 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="bg-grid flex min-h-svh items-center justify-center bg-black p-6">
-      <div className="flex w-95 flex-col items-center bg-black px-0 py-10">
+    <main className="bg-grid flex min-h-svh items-center justify-center bg-black p-5">
+      <div className="flex w-95 flex-col items-center bg-black px-0 py-8">
         <span className="flex size-15 items-center justify-center rounded-2xl border border-border-strong bg-card">
           <VercelLogo className="h-5.5 w-6.25 text-foreground" />
         </span>

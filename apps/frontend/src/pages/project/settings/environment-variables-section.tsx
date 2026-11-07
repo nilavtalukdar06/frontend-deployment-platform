@@ -1,18 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Eye,
-  EyeOff,
-  KeyRound,
-  Pencil,
-  Plus,
-  RotateCw,
-  Trash2,
-} from "lucide-react";
+import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { SecretInput } from "@/components/deploy/secret-input";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
-import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -27,7 +18,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { useRedeploy } from "@/features/deployments/mutations";
+import { useRedeployPrompt } from "@/features/deployments/mutations";
 import type { EnvironmentVariable } from "@/features/environment-variables/api";
 import {
   environmentVariablesQueryOptions,
@@ -87,7 +78,7 @@ function VariableRow({
     return (
       <form
         onSubmit={handleSave}
-        className="flex flex-col gap-2 border-b border-border px-5 py-4 last:border-b-0"
+        className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-b-0"
       >
         <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
           <span className="flex h-10 items-center truncate font-mono text-code">
@@ -126,7 +117,7 @@ function VariableRow({
   }
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-5 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
       <div className="flex min-w-0 flex-col">
         <span className="truncate font-mono text-code">{variable.key}</span>
         <span className="text-xs text-subtle">
@@ -276,7 +267,7 @@ function VariablesSkeleton() {
       {Array.from({ length: 3 }, (_, index) => (
         <div
           key={index}
-          className="flex items-center gap-6 border-b border-border px-5 py-4 last:border-b-0"
+          className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0"
         >
           <Skeleton className="h-4 w-36" />
           <Skeleton className="hidden h-4 w-48 md:block" />
@@ -288,9 +279,8 @@ function VariablesSkeleton() {
 }
 
 function EnvironmentVariablesSection({ project }: { project: Project }) {
-  const [changed, setChanged] = useState(false);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
-  const redeploy = useRedeploy(project.id);
+  const promptRedeploy = useRedeployPrompt(project.id, project.name);
   const remove = useDeleteEnvironmentVariable(project.id);
   const { data, error, isPending, isError, refetch, isRefetching } = useQuery(
     environmentVariablesQueryOptions(project.id),
@@ -298,7 +288,6 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
   const variables = data ?? [];
   const existingKeys = new Set(variables.map((variable) => variable.key));
   const atLimit = variables.length >= MAX_ENVIRONMENT_VARIABLES;
-  const markChanged = () => setChanged(true);
 
   return (
     <SettingsSection
@@ -306,29 +295,6 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
       title="Environment variables"
       description="Encrypted and passed to the install and build commands. New values are used by the next deployment."
     >
-      {changed ? (
-        <Alert variant="info" className="items-center">
-          <AlertDescription className="text-sm">
-            Redeploy to apply your environment variable changes to production.
-          </AlertDescription>
-          <AlertAction className="top-1/2 -translate-y-1/2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={redeploy.isPending}
-              onClick={() => redeploy.mutate()}
-            >
-              {redeploy.isPending ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <RotateCw data-icon="inline-start" />
-              )}
-              Redeploy
-            </Button>
-          </AlertAction>
-        </Alert>
-      ) : null}
-
       {isPending ? (
         <VariablesSkeleton />
       ) : isError ? (
@@ -343,7 +309,7 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
           icon={KeyRound}
           title="No environment variables"
           description="Add variables like VITE_API_URL below. Only variables prefixed with VITE_ are exposed to client code by Vite."
-          className="border-border-strong bg-transparent py-8"
+          className="border-border-strong bg-transparent py-6"
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border-strong">
@@ -352,7 +318,7 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
               key={`${variable.key}:${variable.updatedAt}`}
               projectId={project.id}
               variable={variable}
-              onChanged={markChanged}
+              onChanged={promptRedeploy}
               onDelete={setDeleteKey}
             />
           ))}
@@ -364,7 +330,7 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
           projectId={project.id}
           existingKeys={existingKeys}
           disabled={isPending || atLimit}
-          onChanged={markChanged}
+          onChanged={promptRedeploy}
         />
       )}
       {atLimit ? (
@@ -401,7 +367,7 @@ function EnvironmentVariablesSection({ project }: { project: Project }) {
                 }
 
                 remove.mutate(deleteKey, {
-                  onSuccess: markChanged,
+                  onSuccess: promptRedeploy,
                   onSettled: () => setDeleteKey(null),
                 });
               }}

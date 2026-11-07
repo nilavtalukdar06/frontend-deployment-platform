@@ -13,7 +13,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="flex scroll-mt-24 flex-col gap-8">
+    <section id={id} className="flex scroll-mt-24 flex-col gap-6">
       <div className="flex flex-col gap-1.5 border-b border-border pb-5">
         <h2 className="text-heading font-medium">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>

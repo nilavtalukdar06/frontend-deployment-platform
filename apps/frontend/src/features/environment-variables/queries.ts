@@ -3,7 +3,6 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   deleteEnvironmentVariable,
   listEnvironmentVariables,
@@ -27,8 +26,7 @@ export const useSaveEnvironmentVariable = (projectId: string) => {
     mutationFn: ({ key, value }: { key: string; value: string }) =>
       saveEnvironmentVariable(projectId, key, value),
     meta: { silent: true },
-    onSuccess: (variable) => {
-      toast.success(`Saved ${variable.key}`);
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: environmentVariableKeys.list(projectId),
       });
@@ -41,8 +39,7 @@ export const useDeleteEnvironmentVariable = (projectId: string) => {
 
   return useMutation({
     mutationFn: (key: string) => deleteEnvironmentVariable(projectId, key),
-    onSuccess: (_result, key) => {
-      toast.success(`Removed ${key}`);
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: environmentVariableKeys.list(projectId),
       });

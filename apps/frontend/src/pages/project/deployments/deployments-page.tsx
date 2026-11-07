@@ -34,7 +34,7 @@ function DeploymentsSkeleton() {
       {SKELETON_ROWS.map((index) => (
         <div
           key={index}
-          className="grid grid-cols-1 items-center gap-6 border-b border-border px-5 py-4 last:border-b-0 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_200px]"
+          className="grid grid-cols-1 items-center gap-4 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,1fr)_200px]"
         >
           <div className="flex flex-col gap-2">
             <Skeleton className="h-4 w-24" />
@@ -85,10 +85,10 @@ export default function DeploymentsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[32px] leading-tight font-medium tracking-tight">
+          <h1 className="text-2xl leading-8 font-semibold tracking-tight">
             Deployments
           </h1>
           {pagination ? (

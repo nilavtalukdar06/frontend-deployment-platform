@@ -22,6 +22,22 @@ export const useRedeploy = (projectId: string) => {
   });
 };
 
+const REDEPLOY_PROMPT_ID = "redeploy-prompt";
+
+export const useRedeployPrompt = (projectId: string, projectName: string) => {
+  const redeploy = useRedeploy(projectId);
+
+  return () => {
+    toast("Variables changed", {
+      id: `${REDEPLOY_PROMPT_ID}:${projectId}`,
+      description: `Redeploy ${projectName} to see the changes.`,
+      duration: Number.POSITIVE_INFINITY,
+      cancel: { label: "Cancel", onClick: () => undefined },
+      action: { label: "Redeploy", onClick: () => redeploy.mutate() },
+    });
+  };
+};
+
 export const useCancelDeployment = (projectId: string) => {
   const queryClient = useQueryClient();
 

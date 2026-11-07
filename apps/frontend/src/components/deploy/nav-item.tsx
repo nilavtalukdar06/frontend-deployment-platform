@@ -3,7 +3,7 @@ import { NavLink, type NavLinkProps } from "react-router";
 import { cn } from "@/lib/utils";
 
 const navItemClassName =
-  "flex h-8.5 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground data-active:bg-accent data-active:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0";
+  "flex h-8 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors hover:text-foreground data-active:bg-accent data-active:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0";
 
 function NavItem({
   active,

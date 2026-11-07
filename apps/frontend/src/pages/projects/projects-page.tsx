@@ -27,9 +27,9 @@ const SKELETON_CARDS = Array.from({ length: 6 }, (_, index) => index);
 
 function ProjectCardSkeleton() {
   return (
-    <Card className="min-h-51.25 gap-4 p-5">
+    <Card className="gap-3 p-4">
       <div className="flex items-start gap-3">
-        <Skeleton className="size-9.5 rounded-full" />
+        <Skeleton className="size-8 rounded-full" />
         <div className="flex flex-1 flex-col gap-2">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-3.5 w-44" />
@@ -52,7 +52,7 @@ function ProjectsSkeleton({ view }: { view: ViewMode }) {
         {SKELETON_CARDS.map((index) => (
           <div
             key={index}
-            className="flex items-center gap-4 border-b border-border px-5 py-4 last:border-b-0"
+            className="flex items-center gap-4 border-b border-border px-4 py-3 last:border-b-0"
           >
             <Skeleton className="size-8 rounded-full" />
             <div className="flex flex-1 flex-col gap-2">
@@ -67,7 +67,7 @@ function ProjectsSkeleton({ view }: { view: ViewMode }) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
       {SKELETON_CARDS.map((index) => (
         <ProjectCardSkeleton key={index} />
       ))}
@@ -109,9 +109,9 @@ export default function ProjectsPage() {
   const total = data?.pages[0]?.pagination.total ?? 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <div className="flex items-center gap-3">
-        <InputGroup className="h-11">
+        <InputGroup className="h-9">
           <InputGroupAddon>
             <Search />
           </InputGroupAddon>
@@ -137,27 +137,19 @@ export default function ProjectsPage() {
             }
           }}
           spacing={0}
-          className="h-11 rounded-md border border-border-strong bg-card p-1"
+          className="h-9 rounded-md border border-border-strong bg-card p-0.5"
           aria-label="Layout"
         >
-          <ToggleGroupItem
-            value="grid"
-            aria-label="Grid view"
-            className="h-8.5"
-          >
+          <ToggleGroupItem value="grid" aria-label="Grid view" className="h-7">
             <LayoutGrid />
           </ToggleGroupItem>
-          <ToggleGroupItem
-            value="list"
-            aria-label="List view"
-            className="h-8.5"
-          >
+          <ToggleGroupItem value="list" aria-label="List view" className="h-7">
             <List />
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
 
-      <section className="flex flex-col gap-4">
+      <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between">
           <h1 className="text-title font-medium">Projects</h1>
           {data ? (
@@ -197,7 +189,7 @@ export default function ProjectsPage() {
             />
           )
         ) : view === "grid" ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {projects.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}

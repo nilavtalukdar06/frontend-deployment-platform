@@ -25,7 +25,7 @@ function SettingsSection({
         tone === "destructive" && "border-destructive-border",
       )}
     >
-      <div className="flex flex-col gap-5 p-6 sm:p-8">
+      <div className="flex flex-col gap-4 p-5 sm:p-6">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xl font-medium tracking-tight">{title}</h2>
           {description ? (
@@ -37,7 +37,7 @@ function SettingsSection({
       {footer ? (
         <div
           className={cn(
-            "flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3 sm:px-8",
+            "flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3 sm:px-6",
             tone === "destructive"
               ? "border-destructive-border bg-destructive-surface/50"
               : "border-border bg-muted",

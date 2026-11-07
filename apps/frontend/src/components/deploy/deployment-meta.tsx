@@ -37,11 +37,13 @@ function SourceInfo({
   branch,
   commitSha,
   repositoryUrl,
+  trigger,
   className,
 }: {
   branch: string;
   commitSha: string | null;
   repositoryUrl?: string;
+  trigger?: DeploymentTrigger;
   className?: string;
 }) {
   const commit = shortSha(commitSha);
@@ -71,6 +73,11 @@ function SourceInfo({
         ) : (
           commit
         )}
+        {trigger ? (
+          <span className="font-sans text-muted-foreground">
+            · {triggerLabels[trigger]}
+          </span>
+        ) : null}
       </span>
     </span>
   );

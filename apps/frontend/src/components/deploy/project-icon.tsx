@@ -13,11 +13,11 @@ function ProjectIcon({
       data-slot="project-icon"
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full border border-border-strong bg-background text-brand",
-        size === "md" ? "size-9.5" : "size-8",
+        size === "md" ? "size-8" : "size-7",
         className,
       )}
     >
-      <Zap className="size-4" />
+      <Zap className="size-3.5" />
     </span>
   );
 }

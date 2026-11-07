@@ -355,7 +355,7 @@ export const typeScale = [
 export const radiusScale = [
   {
     name: "sm",
-    value: "4px",
+    value: "3px",
     className: "rounded-sm",
     usage: "Toggle thumb, kbd",
   },
@@ -367,17 +367,17 @@ export const radiusScale = [
   },
   {
     name: "lg",
-    value: "8px",
+    value: "6px",
     className: "rounded-lg",
     usage: "Alerts, banners, menus",
   },
   {
     name: "xl",
-    value: "12px",
+    value: "8px",
     className: "rounded-xl",
     usage: "Cards, panels",
   },
-  { name: "2xl", value: "16px", className: "rounded-2xl", usage: "Logo tile" },
+  { name: "2xl", value: "12px", className: "rounded-2xl", usage: "Logo tile" },
   {
     name: "full",
     value: "9999px",
@@ -390,13 +390,13 @@ export const spacingScale = [4, 8, 12, 16, 20, 24, 32, 40, 48];
 
 export const layoutMetrics = [
   { name: "Sidebar width", value: "240px" },
-  { name: "Header height", value: "60px + 1px border" },
-  { name: "Page padding", value: "32px" },
-  { name: "Card padding", value: "20px" },
+  { name: "Header height", value: "56px + 1px border" },
+  { name: "Page padding", value: "24px" },
+  { name: "Card padding", value: "16px" },
   { name: "Card grid gap", value: "16px" },
-  { name: "Button height", value: "34px (48px on auth)" },
-  { name: "Input height", value: "40px (36px in sidebar)" },
-  { name: "Nav item height", value: "34px" },
+  { name: "Button height", value: "32px (44px on auth)" },
+  { name: "Input height", value: "36px" },
+  { name: "Nav item height", value: "32px" },
   { name: "Log row height", value: "24px" },
   { name: "Icon size", value: "16px, 1.5px stroke" },
   { name: "Status dot", value: "8px" },
@@ -592,15 +592,6 @@ export const demoDeployments: DemoDeployment[] = [
     time: "Sep 21",
   },
 ];
-
-export const pipelineSteps = [
-  { name: "Initialize", detail: "0s", state: "done" },
-  { name: "Clone", detail: "2s", state: "done" },
-  { name: "Install", detail: "5s", state: "done" },
-  { name: "Build", detail: "running", state: "running" },
-  { name: "Upload", detail: "", state: "pending" },
-  { name: "Finalize", detail: "", state: "pending" },
-] as const;
 
 export type LogLine = {
   time: string;

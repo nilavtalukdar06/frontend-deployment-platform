@@ -22,7 +22,7 @@ function ChartTooltip() {
 function BarChartCard() {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex items-start justify-between px-6 py-5">
+      <div className="flex items-start justify-between px-5 py-4">
         <div className="flex flex-col gap-0.5">
           <span className="text-title font-medium">Page views</span>
           <span className="text-sm text-muted-foreground">
@@ -40,7 +40,7 @@ function BarChartCard() {
           </span>
         </div>
       </div>
-      <div className="relative border-t border-border px-6 pt-8 pb-4">
+      <div className="relative border-t border-border px-5 pt-8 pb-4">
         <div className="flex gap-4">
           <div className="flex h-60 flex-col justify-between text-right text-label text-muted-foreground">
             {yAxisTicks.map((tick) => (
@@ -135,13 +135,13 @@ function Donut() {
 function RoutesCard() {
   return (
     <Card className="gap-0 py-0">
-      <div className="flex flex-col gap-0.5 px-6 py-5">
+      <div className="flex flex-col gap-0.5 px-5 py-4">
         <span className="text-title font-medium">Views by route</span>
         <span className="text-sm text-muted-foreground">
           Share of page views, last 24 hours
         </span>
       </div>
-      <div className="flex flex-col items-center gap-12 border-t border-border p-8 md:flex-row md:p-12">
+      <div className="flex flex-col items-center gap-8 border-t border-border p-6 md:flex-row md:p-12">
         <Donut />
         <table className="w-full text-sm">
           <thead>

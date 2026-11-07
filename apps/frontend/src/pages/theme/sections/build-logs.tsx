@@ -1,7 +1,5 @@
 import {
   ChevronDown,
-  CircleCheck,
-  CircleDashed,
   Copy,
   LoaderCircle,
   Search,
@@ -10,47 +8,14 @@ import {
 import { Card } from "@/components/ui/card";
 import { Kbd } from "@/components/ui/kbd";
 import { Section, Specimen } from "@/pages/theme/sections/section";
-import { logLines, pipelineSteps } from "@/pages/theme/data";
-
-function PipelineCard() {
-  return (
-    <Card className="gap-6 p-6">
-      <span className="text-title font-medium">Pipeline</span>
-      <div className="grid grid-cols-3 gap-y-6 md:grid-cols-6">
-        {pipelineSteps.map((step) => (
-          <div key={step.name} className="flex flex-col items-center gap-2">
-            {step.state === "done" && (
-              <CircleCheck className="size-6 text-success" />
-            )}
-            {step.state === "running" && (
-              <LoaderCircle className="size-6 animate-spin text-warning" />
-            )}
-            {step.state === "pending" && (
-              <CircleDashed className="size-6 text-subtle" />
-            )}
-            <div className="flex flex-col items-center leading-tight">
-              <span
-                className={`text-sm font-medium ${step.state === "pending" ? "text-subtle" : ""}`}
-              >
-                {step.name}
-              </span>
-              <span className="min-h-4.5 text-label text-subtle">
-                {step.detail}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
+import { logLines } from "@/pages/theme/data";
 
 function BuildLogsCard() {
   const warningCount = logLines.filter((line) => line.level === "warn").length;
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex h-12.5 items-center justify-between px-5">
+      <div className="flex h-12.5 items-center justify-between px-4">
         <span className="flex items-center gap-3 text-title font-medium">
           <ChevronDown className="size-4 text-muted-foreground" />
           Build logs
@@ -60,7 +25,7 @@ function BuildLogsCard() {
           <LoaderCircle className="size-4 animate-spin text-warning" />
         </span>
       </div>
-      <div className="flex h-13.5 items-center justify-between gap-4 border-y border-border px-5 text-sm text-muted-foreground">
+      <div className="flex h-12 items-center justify-between gap-4 border-y border-border px-4 text-sm text-muted-foreground">
         <span className="flex items-center gap-4">
           <Copy className="size-4" />
           {logLines.length} lines
@@ -85,7 +50,7 @@ function BuildLogsCard() {
         {logLines.map((line) => (
           <div
             key={line.time}
-            className={`flex h-6 items-center gap-6 px-5 ${line.level === "warn" ? "bg-warning-subtle text-warning" : "text-log"}`}
+            className={`flex h-6 items-center gap-4 px-4 ${line.level === "warn" ? "bg-warning-subtle text-warning" : "text-log"}`}
           >
             <span className="w-23.5 shrink-0 text-subtle">{line.time}</span>
             <span className="truncate">{line.message}</span>
@@ -96,16 +61,13 @@ function BuildLogsCard() {
   );
 }
 
-function PipelineSection() {
+function BuildLogsSection() {
   return (
     <Section
-      id="pipeline"
-      title="Pipeline and build logs"
-      description="Step indicators for each build phase and a monospaced, timestamped log viewer with highlighted warnings."
+      id="build-logs"
+      title="Build logs"
+      description="A monospaced, timestamped log viewer with highlighted warnings."
     >
-      <Specimen label="Pipeline steps">
-        <PipelineCard />
-      </Specimen>
       <Specimen label="Build logs">
         <BuildLogsCard />
       </Specimen>
@@ -113,4 +75,4 @@ function PipelineSection() {
   );
 }
 
-export { PipelineSection };
+export { BuildLogsSection };

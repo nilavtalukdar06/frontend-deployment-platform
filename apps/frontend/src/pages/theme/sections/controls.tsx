@@ -143,7 +143,7 @@ function FormControlsSection() {
       title="Form controls"
       description="Inputs, textareas, switches, selectable fields and the grouped controls used in the import and settings forms."
     >
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Specimen label="Text input states">
           <div className="flex flex-col gap-2">
             <Label>Project name</Label>
@@ -181,7 +181,7 @@ function FormControlsSection() {
         <Specimen label="Search, textarea and fields">
           <div className="relative">
             <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-subtle" />
-            <Input placeholder="Search projects…" className="h-10.5 pl-10" />
+            <Input placeholder="Search projects…" className="h-10 pl-10" />
           </div>
           <div className="flex h-9 items-center gap-2.5 rounded-md border border-border-strong bg-card px-3 text-sm text-subtle">
             <Search className="size-4" />
@@ -214,7 +214,7 @@ function FormControlsSection() {
       </div>
 
       <Specimen label="Switch">
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-3 text-sm">
             <Switch />
             <span className="text-muted-foreground">Off</span>
@@ -252,7 +252,7 @@ function FormControlsSection() {
       </Specimen>
 
       <Specimen label="Environment variable rows">
-        <div className="rounded-xl border border-border bg-card p-5">
+        <div className="rounded-xl border border-border bg-card p-4">
           <div className="grid grid-cols-[1fr_1fr_40px] gap-3">
             <Label>Key</Label>
             <Label>Value</Label>
@@ -286,7 +286,7 @@ function FormControlsSection() {
       </Specimen>
 
       <Specimen label="Grouped toggles">
-        <div className="flex flex-wrap items-center gap-6">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-card p-0.5">
             <span className="flex size-8 items-center justify-center rounded-sm bg-accent text-foreground">
               <LayoutGrid className="size-4" />
@@ -313,14 +313,14 @@ function FormControlsSection() {
 
       <Specimen label="Form footer">
         <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="flex flex-col gap-1.5 p-6">
+          <div className="flex flex-col gap-1.5 p-5">
             <h3 className="text-xl font-medium tracking-tight">General</h3>
             <p className="text-sm text-muted-foreground">
               The project name is unique among your projects. The slug and URL
               never change.
             </p>
           </div>
-          <div className="flex items-center justify-between gap-4 border-t border-border bg-muted px-6 py-3">
+          <div className="flex items-center justify-between gap-4 border-t border-border bg-muted px-5 py-3">
             <span className="text-sm text-subtle">
               Name: up to 100 characters. Description: up to 500.
             </span>
@@ -336,11 +336,11 @@ function FormControlsSection() {
 
       <Specimen label="Collapsible section header">
         <div className="overflow-hidden rounded-lg border border-border-strong bg-card">
-          <div className="flex h-12.5 items-center gap-3 border-b border-border px-5 text-title font-medium">
+          <div className="flex h-12.5 items-center gap-3 border-b border-border px-4 text-title font-medium">
             <ChevronDown className="size-4 text-muted-foreground" />
             Build and output settings
           </div>
-          <div className="p-5 text-sm text-muted-foreground">
+          <div className="p-4 text-sm text-muted-foreground">
             Section content sits on the card surface.
           </div>
         </div>
@@ -363,13 +363,13 @@ function BadgesSection() {
       title="Badges and status"
       description="Pill badges, deployment statuses, metadata chips and trigger labels."
     >
-      <Specimen label="Deployment status" className="flex-row flex-wrap gap-8">
+      <Specimen label="Deployment status" className="flex-row flex-wrap gap-6">
         <StatusLabel status="ready" duration="2m 14s" />
         <StatusLabel status="building" duration="0m 41s" />
         <StatusLabel status="failed" duration="1m 08s" />
         <StatusLabel status="canceled" duration="0m 06s" />
       </Specimen>
-      <Specimen label="Status dots" className="flex-row items-center gap-6">
+      <Specimen label="Status dots" className="flex-row items-center gap-4">
         <StatusDot status="ready" />
         <StatusDot status="building" />
         <StatusDot status="failed" />
@@ -394,12 +394,12 @@ function BadgesSection() {
         <Badge variant="secondary">Secondary</Badge>
         <Badge>Default</Badge>
       </Specimen>
-      <Specimen label="Repository pill and meta" className="gap-5">
+      <Specimen label="Repository pill and meta" className="gap-4">
         <span className="inline-flex h-6 w-fit items-center gap-2 rounded-full border border-border bg-muted px-2.5 text-code text-muted-foreground">
           <GithubIcon className="size-3.5" />
           nilavtalukdar06/dor-check
         </span>
-        <div className="flex flex-wrap items-center gap-6 text-label text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4 text-label text-muted-foreground">
           <span className="inline-flex items-center gap-2 font-mono">
             <GitBranch className="size-3.5 text-subtle" />
             main
@@ -428,7 +428,7 @@ function BadgesSection() {
       </Specimen>
       <Specimen
         label="Deployment triggers"
-        className="flex-row flex-wrap gap-8"
+        className="flex-row flex-wrap gap-6"
       >
         <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
           <GitCommitVertical className="size-4" />
@@ -472,7 +472,7 @@ function AlertsSection() {
       title="Alerts and banners"
       description="Inline feedback surfaces: sign-in errors, build state strips, redeploy notices and tips."
     >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Alert variant="destructive">
           <CircleAlert />
           <AlertDescription>
@@ -515,7 +515,7 @@ function AlertsSection() {
         </Alert>
       </div>
       <Specimen label="Building strip">
-        <div className="flex h-10.25 items-center justify-between overflow-hidden rounded-lg border-y border-border bg-warning-surface px-5 text-sm text-warning">
+        <div className="flex h-9 items-center justify-between overflow-hidden rounded-lg border-y border-border bg-warning-surface px-4 text-sm text-warning">
           <span className="flex items-center gap-3">
             <span className="size-3.5 animate-spin rounded-full border-2 border-warning border-t-transparent" />
             <span>
@@ -530,7 +530,7 @@ function AlertsSection() {
         </div>
       </Specimen>
       <Specimen label="Tip strip">
-        <div className="flex h-14 items-center gap-3 rounded-lg border border-border bg-card px-5 text-sm text-muted-foreground">
+        <div className="flex h-14 items-center gap-3 rounded-lg border border-border bg-card px-4 text-sm text-muted-foreground">
           <Zap className="size-4 text-success" />
           <span>
             To update your production deployment, push to the{" "}

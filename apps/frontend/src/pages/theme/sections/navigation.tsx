@@ -19,7 +19,7 @@ import { Section, Specimen } from "@/pages/theme/sections/section";
 function SidebarFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex w-60 flex-col overflow-hidden rounded-xl border border-border bg-background">
-      <div className="flex h-15.25 items-center gap-3 border-b border-border px-5">
+      <div className="flex h-14 items-center gap-3 border-b border-border px-4">
         <VercelLogo className="h-4 w-4.5 text-foreground" />
         <span className="text-title font-medium">Deploy</span>
       </div>
@@ -41,7 +41,7 @@ function NavigationSection() {
       title="Navigation"
       description="Sidebar, project switcher header, breadcrumbs and settings navigation."
     >
-      <div className="flex flex-wrap gap-8">
+      <div className="flex flex-wrap gap-6">
         <Specimen label="Workspace sidebar">
           <SidebarFrame>
             <NavItem active>
@@ -74,9 +74,9 @@ function NavigationSection() {
             </NavItem>
           </SidebarFrame>
         </Specimen>
-        <div className="flex min-w-0 flex-1 flex-col gap-8">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
           <Specimen label="Header with project switcher">
-            <div className="flex h-15.25 items-center justify-between rounded-xl border border-border bg-background px-6">
+            <div className="flex h-14 items-center justify-between rounded-xl border border-border bg-background px-5">
               <span className="flex items-center gap-2 text-sm font-medium">
                 dor-check
                 <ChevronsUpDown className="size-3.5 text-subtle" />
@@ -88,7 +88,7 @@ function NavigationSection() {
             </div>
           </Specimen>
           <Specimen label="Account header (new project)">
-            <div className="flex h-15.25 items-center justify-between rounded-xl border border-border bg-background px-6">
+            <div className="flex h-14 items-center justify-between rounded-xl border border-border bg-background px-5">
               <span className="flex items-center gap-3 text-sm font-medium">
                 <span className="size-7.5 rounded-full bg-[#16a34a]" />
                 nilavtalukdar06’s projects
